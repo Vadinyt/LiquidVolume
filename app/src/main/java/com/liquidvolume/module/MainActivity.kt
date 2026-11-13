@@ -24,7 +24,7 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20f), dp(18f), dp(20f), dp(16f))
+            setPadding(dp(20f), dp(52f), dp(20f), dp(16f))
             setBackgroundColor(Color.rgb(8, 12, 22))
         }
 
@@ -42,16 +42,42 @@ class MainActivity : Activity() {
             setPadding(0, dp(4f), 0, dp(16f))
         })
 
-        root.addView(LiquidGlassPreviewView(this).apply {
+        val preview = LiquidGlassPreviewView(this).apply {
             clipToOutline = true
             background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(25f).toFloat()
                 setColor(0xFF15213A.toInt())
             }
-        }, LinearLayout.LayoutParams(
+        }
+        root.addView(preview, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(475f)
+            dp(435f)
         ))
+
+        val backgroundToggle = TextView(this).apply {
+            text = "Voir sur fond noir"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setTextColor(0xFFE8F2FF.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(15f).toFloat()
+                setColor(0xFF202D47.toInt())
+                setStroke(dp(1f), 0xFF4C607C.toInt())
+            }
+            setOnClickListener {
+                preview.showDarkBackdrop = !preview.showDarkBackdrop
+                text = if (preview.showDarkBackdrop) {
+                    "Voir sur fond coloré"
+                } else {
+                    "Voir sur fond noir"
+                }
+            }
+        }
+        root.addView(backgroundToggle, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44f)
+        ).apply { topMargin = dp(12f) })
 
         root.addView(TextView(this).apply {
             text = "Compact Volume  •  Frosted Pearl"
@@ -61,9 +87,9 @@ class MainActivity : Activity() {
             setPadding(0, dp(19f), 0, dp(6f))
         })
         root.addView(TextView(this).apply {
-            text = "Glisse sur la capsule pour voir le remplissage. " +
-                "Aperçu visuel uniquement : aucun changement du volume réel dans cet écran. " +
-                "La version stable de SystemUI reste inchangée."
+            text = "Glisse sur la capsule pour prévisualiser le niveau. " +
+                "Le panneau réel conserve les icônes, le flou et les commandes audio Samsung. " +
+                "Le fond noir permet de comparer les deux rendus."
             textSize = 13f
             setTextColor(0xFFB4C2D5.toInt())
             setLineSpacing(dp(3f).toFloat(), 1f)
