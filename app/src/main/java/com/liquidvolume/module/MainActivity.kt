@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 
 /**
  * Design studio, not an alternate system-volume UI.
@@ -95,6 +96,11 @@ class MainActivity : Activity() {
             setLineSpacing(dp(3f).toFloat(), 1f)
         })
 
-        setContentView(root)
+        val scroll = ScrollView(this).apply {
+            fillViewport = true
+            isVerticalScrollBarEnabled = false
+            addView(root)
+        }
+        setContentView(scroll)
     }
 }
