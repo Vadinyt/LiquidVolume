@@ -233,9 +233,34 @@ class LiquidVolumeEntry : XposedModule() {
                         log(Log.WARN, TAG, "BLUR_CALL_LOG_FAILED ${e.javaClass.simpleName}")
                     }
                 }
-                chain.proceed()
+                val result = chain.proceed()
+                if (index <= 20) {
+                    try {
+                        val view = chain.args[0] as? android.view.View
+                        val panel = generateSequence(view?.parent) { it.parent }
+                            .filterIsInstance<android.view.View>()
+                            .firstOrNull { it.javaClass.name == "com.android.systemui.volume.view.standard.VolumePanelView" }
+                        if (panel != null && view != null && view.width > 0 && view.height > 0) {
+                            val original = view.background
+                            if (original is android.graphics.drawable.GradientDrawable) {
+                                val glass = original.constantState?.newDrawable()?.mutate() as? android.graphics.drawable.GradientDrawable
+                                if (glass != null) {
+                                    glass.setColor(0x55FFFFFF)
+                                    glass.cornerRadius = view.width / 2f
+                                    view.background = glass
+                                    log(Log.INFO, TAG, "GLASS_APPLIED native blur retained; translucent white background on compact blur view")
+                                }
+                            } else {
+                                log(Log.WARN, TAG, "GLASS_SKIPPED unsupported background ${original?.javaClass?.name}")
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        log(Log.WARN, TAG, "GLASS_FAILED ${e.javaClass.simpleName}: ${e.message}")
+                    }
+                }
+                result
             }
-            log(Log.INFO, TAG, "BLUR_HOOK_INSTALLED observation only; no values changed")
+            log(Log.INFO, TAG, "GLASS_HOOK_INSTALLED compact panel styling enabled; native blur call preserved")
         } catch (e: Throwable) {
             log(Log.WARN, TAG, "BLUR_HOOK_FAILED ${e.javaClass.simpleName}: ${e.message}")
         }
