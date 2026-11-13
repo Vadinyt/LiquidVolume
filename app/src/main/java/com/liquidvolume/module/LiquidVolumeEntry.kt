@@ -241,20 +241,26 @@ class LiquidVolumeEntry : XposedModule() {
                             .filterIsInstance<android.view.View>()
                             .firstOrNull { it.javaClass.name == "com.android.systemui.volume.view.standard.VolumePanelView" }
                         if (panel != null && view != null && view.width > 0 && view.height > 0) {
-                            // The parent is larger than the compact slider: never tint it.
-                            // Keep Samsung's BackgroundBlurDrawable and audio controls intact.
+                            // Style the actual compact blur surface, not its oversized parent.
+                            // Do not replace the Samsung drawable: it provides native blur.
                             if (view.getTag(0x7e0a0001) != true) {
-                                val glass = android.graphics.drawable.GradientDrawable(
-                                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                                    intArrayOf(0x66FFFFFF, 0x22FFFFFF)
-                                ).apply {
-                                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                                    cornerRadius = view.width / 2f
-                                    setStroke(1, 0x55FFFFFF)
+                                val nativeBlur = view.background
+                                if (nativeBlur != null && nativeBlur.javaClass.name.contains("BackgroundBlurDrawable")) {
+                                    nativeBlur.mutate().alpha = 120
+                                    val sheen = android.graphics.drawable.GradientDrawable(
+                                        android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                                        intArrayOf(0x55FFFFFF, 0x16FFFFFF, 0x36FFFFFF)
+                                    ).apply {
+                                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                        cornerRadius = view.width / 2f
+                                        setStroke(2, 0x88FFFFFF)
+                                    }
+                                    view.foreground = sheen
+                                    view.setTag(0x7e0a0001, true)
+                                    log(Log.INFO, TAG, "GLASS_APPLIED native blur alpha=120 with white glass sheen")
+                                } else {
+                                    log(Log.WARN, TAG, "GLASS_SKIPPED unexpected compact drawable ${nativeBlur?.javaClass?.name}")
                                 }
-                                view.foreground = glass
-                                view.setTag(0x7e0a0001, true)
-                                log(Log.INFO, TAG, "GLASS_APPLIED compact blur view foreground; no parent tint")
                             }
                         }
                     } catch (e: Throwable) {
