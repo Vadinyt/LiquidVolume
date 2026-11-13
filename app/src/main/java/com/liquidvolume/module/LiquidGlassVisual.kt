@@ -226,6 +226,11 @@ class LiquidGlassRimDrawable : Drawable() {
 }
 
 class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+    var showDarkBackdrop: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
     private var level = 0.38f
     private val density = resources.displayMetrics.density
@@ -242,27 +247,35 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         val w = width.toFloat()
         val h = height.toFloat()
         if (w == 0f || h == 0f) return
-        brush.shader = LinearGradient(0f, 0f, w, h,
-            intArrayOf(0xFF0A1425.toInt(), 0xFF172543.toInt(), 0xFF302547.toInt()),
-            null, Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, w, h, brush)
+        if (showDarkBackdrop) {
+            // Real-life comparison: this is close to the black app backgrounds
+            // visible behind the actual Samsung SystemUI compact slider.
+            brush.shader = null
+            brush.color = 0xFF080B11.toInt()
+            canvas.drawRect(0f, 0f, w, h, brush)
+        } else {
+            brush.shader = LinearGradient(0f, 0f, w, h,
+                intArrayOf(0xFF0A1425.toInt(), 0xFF172543.toInt(), 0xFF302547.toInt()),
+                null, Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, w, h, brush)
 
-        // Rich colors behind the glass to make real translucency visible.
-        val circles = listOf(
-            Triple(0.26f to 0.38f, 0x987B73FC.toInt(), 0.43f),
-            Triple(0.68f to 0.67f, 0x8366D5FF.toInt(), 0.42f),
-            Triple(0.43f to 0.88f, 0x7BFF8DAA, 0.39f)
-        )
-        for ((position, color, radius) in circles) {
-            val x = w * position.first
-            val y = h * position.second
-            val rr = max(w, h) * radius
-            brush.shader = RadialGradient(x, y, rr,
-                intArrayOf(color, color and 0x00FFFFFF, 0x00000000),
-                floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
-            canvas.drawCircle(x, y, rr, brush)
+            // Rich colors behind the glass show the color shifts in context.
+            val circles = listOf(
+                Triple(0.26f to 0.38f, 0x987B73FC.toInt(), 0.43f),
+                Triple(0.68f to 0.67f, 0x8366D5FF.toInt(), 0.42f),
+                Triple(0.43f to 0.88f, 0x7BFF8DAA, 0.39f)
+            )
+            for ((position, color, radius) in circles) {
+                val x = w * position.first
+                val y = h * position.second
+                val rr = max(w, h) * radius
+                brush.shader = RadialGradient(x, y, rr,
+                    intArrayOf(color, color and 0x00FFFFFF, 0x00000000),
+                    floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
+                canvas.drawCircle(x, y, rr, brush)
+            }
+            brush.shader = null
         }
-        brush.shader = null
 
         // Native One UI 9 compact blur area measured near 118×591 px on the S23+.
         // Preview uses the corresponding approximately 42×210 dp proportions.
