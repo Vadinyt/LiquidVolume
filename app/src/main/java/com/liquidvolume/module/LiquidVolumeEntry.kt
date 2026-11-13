@@ -208,7 +208,27 @@ class LiquidVolumeEntry : XposedModule() {
                 if (index <= 20) {
                     try {
                         val args = chain.args
-                        log(Log.INFO, TAG, "BLUR_CALL #$index radiusOrInt1=${args[1]} opacityOrFloat=${args[2]} int3=${args[3]} viewType=${args[0]?.javaClass?.simpleName}")
+                        log(Log.INFO, TAG, "BLUR_CALL #$index arg1=${args[1]} arg2=${args[2]} arg3=${args[3]} viewType=${args[0]?.javaClass?.name}")
+                        if (index <= 5) {
+                            val view = args[0] as? android.view.View
+                            if (view != null) {
+                                log(Log.INFO, TAG, "COMPACT_VIEW_CONTEXT ${view.context.javaClass.name} id=${view.id} visible=${view.visibility} attached=${view.isAttachedToWindow} size=${view.width}x${view.height} alpha=${view.alpha} elevation=${view.elevation}")
+                                log(Log.INFO, TAG, "COMPACT_VIEW_BACKGROUND ${view.background?.javaClass?.name} foreground=${(view as? android.widget.FrameLayout)?.foreground?.javaClass?.name}")
+                                var parent: android.view.ViewParent? = view.parent
+                                var depth = 0
+                                while (parent != null && depth < 9) {
+                                    val parentView = parent as? android.view.View
+                                    log(Log.INFO, TAG, "COMPACT_PARENT #$depth type=${parent.javaClass.name} id=${parentView?.id} size=${parentView?.width}x${parentView?.height} background=${parentView?.background?.javaClass?.name}")
+                                    parent = parent.parent
+                                    depth++
+                                }
+                                val root = view.rootView
+                                log(Log.INFO, TAG, "COMPACT_ROOT ${root.javaClass.name} size=${root.width}x${root.height} tokenPresent=${root.windowToken != null}")
+                            }
+                            Throwable().stackTrace.take(12).forEach {
+                                log(Log.INFO, TAG, "COMPACT_CALLER ${it.className}.${it.methodName}")
+                            }
+                        }
                     } catch (e: Throwable) {
                         log(Log.WARN, TAG, "BLUR_CALL_LOG_FAILED ${e.javaClass.simpleName}")
                     }
