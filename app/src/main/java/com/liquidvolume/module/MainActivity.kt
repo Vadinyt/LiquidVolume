@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         }
         root.addView(preview, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(435f)
+            dp(475f)
         ))
 
         val backgroundToggle = TextView(this).apply {
@@ -81,16 +81,16 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(12f) })
 
         root.addView(TextView(this).apply {
-            text = "Compact Volume  •  Frosted Pearl"
+            text = "Liquid Glass  •  Aperçu agrandi"
             textSize = 17f
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             setPadding(0, dp(19f), 0, dp(6f))
         })
         root.addView(TextView(this).apply {
-            text = "Glisse sur la capsule pour prévisualiser le niveau. " +
-                "Le panneau réel conserve les icônes, le flou et les commandes audio Samsung. " +
-                "Le fond noir permet de comparer les deux rendus."
+            text = "Design iOS avec capsule large, verre translucide et reflets discrets. " +
+                "Glisse sur la capsule pour simuler le volume. " +
+                "Sur le système, Samsung conserve les dimensions et les commandes audio."
             textSize = 13f
             setTextColor(0xFFB4C2D5.toInt())
             setLineSpacing(dp(3f).toFloat(), 1f)
