@@ -1,6 +1,7 @@
 package com.liquidvolume.module
 
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.util.Log
 import android.view.View
@@ -8,16 +9,22 @@ import android.view.ViewGroup
 import android.widget.ProgressBar
 
 /**
- * Applies the finished Liquid Glass artwork to the EXISTING Samsung compact row.
+ * Liquid Glass on Samsung's real compact VolumeSeekBar.
  *
- * Verified against the user's SystemUI.apk volume_row_view.xml:
- *   VolumeRowView     0x7e0a1050
- *   native blur image 0x7e0a1030 (normally INVISIBLE until blur is enabled)
- *   slider FrameLayout 0x7e0a1052
- *   VolumeSeekBar     0x7e0a1051 (rotated 270 degrees)
+ * volume_row_view.xml:
+ * - VolumeRowView (0x7e0a1050)
+ * - native blur ImageView (0x7e0a1030)
+ * - slider container (0x7e0a1052)
+ * - VolumeSeekBar (0x7e0a1051)
  *
- * Never changes the volume slider's progressDrawable, touch target, geometry,
- * visibility of its icons, audio callbacks, or any view outside the compact row.
+ * Crucial discovery from the supplied SystemUI.apk:
+ * volume_seekbar_drawable_no_blur.xml is a LayerDrawable containing both an
+ * opaque android.R.id.background and a separate native android.R.id.progress.
+ * Styling only the slider container did not affect that opaque inner layer.
+ *
+ * We replace ONLY the inner background-layer drawable. We do not replace
+ * progressDrawable itself, the SecRoundedCornerSeekBarDrawable fill, view
+ * hierarchy, Samsung foreground, animations, or volume callbacks.
  */
 internal object CompactGlassStyler {
     private const val ROW_ID = 0x7e0a1050
@@ -26,91 +33,123 @@ internal object CompactGlassStyler {
     private const val SLIDER_ID = 0x7e0a1051
     private const val STATE_TAG = 0x7f0a7e10
     private const val TAG = "LiquidVolume"
+    private const val COMPACT_PANEL =
+        "com.android.systemui.volume.view.standard.VolumePanelView"
+    private const val ROW_CLASS = "com.android.systemui.volume.view.VolumeRowView"
+    private const val SEEK_CLASS = "com.android.systemui.volume.view.VolumeSeekBar"
 
     private data class State(
-        val background: Drawable?,
+        val originalTrackBackground: Drawable?,
+        val progressLayers: LayerDrawable,
+        val originalInnerBackground: Drawable,
+        val transparentInnerBackground: Drawable,
         val shell: LiquidGlassShellDrawable,
-        val rim: LiquidGlassRimDrawable,
-        val compositedBackground: Drawable
+        val rim: LiquidGlassRimDrawable
     )
 
     fun apply(compactPanel: View, blurView: View): Boolean {
-        if (compactPanel.javaClass.name != COMPACT_PANEL) return false
-        if (blurView.id != BLUR_ID) return false
-        val row = findAncestor(blurView, ROW_CLASS) as? ViewGroup ?: return false
+        if (compactPanel.javaClass.name != COMPACT_PANEL || blurView.id != BLUR_ID) return false
+        val row = ancestor(blurView, ROW_CLASS) as? ViewGroup ?: return false
         if (row.id != ROW_ID || !row.isAttachedToWindow) return false
 
         val track = row.findViewById<ViewGroup>(TRACK_ID) ?: return false
         val slider = row.findViewById<ProgressBar>(SLIDER_ID) ?: return false
-        if (slider.parent !== track || track.width <= 0 || track.height <= 0) return false
+        if (slider.javaClass.name != SEEK_CLASS || slider.parent !== track ||
+            track.width <= 0 || track.height <= 0) return false
 
-        // The original blur remains a Samsung BackgroundBlurDrawable, rather than
-        // a simulated screenshot overlay. Do not force it visible: Samsung owns its
-        // visibility and may disable it for accessibility or power saving.
-        if (blurView.background?.javaClass?.name?.contains("BackgroundBlurDrawable") != true) {
-            Log.i(TAG, "GLASS_BLUR_NOTE: native backdrop blur not currently available")
-        }
+        val layers = slider.progressDrawable as? LayerDrawable ?: return false
+        val backgroundLayer = layers.findDrawableByLayerId(android.R.id.background) ?: return false
+        val fillLayer = layers.findDrawableByLayerId(android.R.id.progress) ?: return false
+        if (layers.numberOfLayers < 2 || fillLayer === backgroundLayer) return false
 
         val existing = track.getTag(STATE_TAG) as? State
-        if (existing != null) {
-            // OneUI may restore the stock background on show; reapply only then.
-            if (track.background !== existing.compositedBackground) {
-                track.background = existing.compositedBackground
+        if (existing != null && existing.progressLayers === layers) {
+            // Vendor code can restore a drawable while displaying the panel.
+            // Reapply only on the normal onShow callback, never on every frame.
+            if (track.background !== existing.shell) track.background = existing.shell
+            if (layers.findDrawableByLayerId(android.R.id.background) !==
+                existing.transparentInnerBackground) {
+                layers.setDrawableByLayerId(
+                    android.R.id.background, existing.transparentInnerBackground
+                )
+            }
+            if (existing.rim.bounds.width() != track.width ||
+                existing.rim.bounds.height() != track.height) {
+                existing.rim.setBounds(0, 0, track.width, track.height)
             }
             return true
         }
 
-        val glassShell = LiquidGlassShellDrawable()
-        val glassRim = LiquidGlassRimDrawable()
+        if (existing != null) {
+            // Samsung re-created the seekbar drawable. Undo only our old view
+            // decoration and reattach to the current native layers.
+            rollback(track, existing)
+        }
+
+        val shell = LiquidGlassShellDrawable()
+        val rim = LiquidGlassRimDrawable().apply {
+            setBounds(0, 0, track.width, track.height)
+        }
+        val transparentBase = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 999f
+            setColor(0x06FFFFFF)
+        }
         val state = State(
-            background = track.background,
-            shell = glassShell,
-            rim = glassRim,
-            // Glass drawing sits below Samsung's original seekbar and foreground.
-            // Keeping the vendor foreground instance untouched preserves ripple
-            // and press-state handling more reliably than wrapping it.
-            compositedBackground = LayerDrawable(arrayOf(glassShell, glassRim))
+            originalTrackBackground = track.background,
+            progressLayers = layers,
+            originalInnerBackground = backgroundLayer,
+            transparentInnerBackground = transparentBase,
+            shell = shell,
+            rim = rim
         )
+
         try {
-            // The glass body and border are a single background layer.
-            // No changes to Samsung's native foreground, icons or slider.
-            track.background = state.compositedBackground
-            // Samsung's original volume_seekbar_drawable_no_blur has a genuine
-            // white gradient and custom SecRoundedCornerSeekBarDrawable. Keep it
-            // intact instead of tinting it flat, which also reduces crash risk.
-            // Avoid clipToOutline changes: they can clip the rotating seekbar and
-            // create renderer issues on Samsung's vendor SystemUI builds.
+            if (!layers.setDrawableByLayerId(android.R.id.background, transparentBase)) {
+                Log.w(TAG, "GLASS_SKIPPED: native seekbar layer is immutable")
+                return false
+            }
+            // Native progress / opacity fill stays untouched. The translucent
+            // shell is now visible THROUGH the cleared internal background.
+            track.background = shell
+            // Draw a subtle outline ABOVE the native fill without replacing
+            // Samsung's foreground (and without consuming any touch events).
+            track.overlay.add(rim)
             track.setTag(STATE_TAG, state)
             track.invalidate()
             slider.invalidate()
-            Log.i(TAG, "GLASS_NATIVE_APPLIED to original VolumeSeekBar without replacing its drawable")
+
+            Log.i(TAG, "GLASS_VISIBLE_APPLIED: cleared native gray seekbar layer")
             return true
         } catch (error: Throwable) {
-            // Atomic-ish rollback if Samsung rejects any nonessential visual API.
-            restore(track, state)
+            rollback(track, state)
             Log.w(TAG, "GLASS_STYLE_ROLLED_BACK ${error.javaClass.simpleName}: ${error.message}")
             return false
         }
     }
 
-    private fun restore(track: ViewGroup, state: State) {
+    private fun rollback(track: ViewGroup, state: State) {
         try {
-            track.background = state.background
+            if (state.progressLayers.findDrawableByLayerId(android.R.id.background) ===
+                state.transparentInnerBackground) {
+                state.progressLayers.setDrawableByLayerId(
+                    android.R.id.background, state.originalInnerBackground
+                )
+            }
+            track.overlay.remove(state.rim)
+            track.background = state.originalTrackBackground
             track.setTag(STATE_TAG, null)
-        } catch (ignored: Throwable) {
-            Log.w(TAG, "GLASS_RESTORE_FAILED ${ignored.javaClass.simpleName}")
+        } catch (error: Throwable) {
+            Log.w(TAG, "GLASS_RESTORE_FAILED ${error.javaClass.simpleName}")
         }
     }
 
-    private fun findAncestor(view: View, className: String): View? {
+    private fun ancestor(view: View, expected: String): View? {
         var current: View? = view
         repeat(12) {
-            if (current?.javaClass?.name == className) return current
+            if (current?.javaClass?.name == expected) return current
             current = current?.parent as? View
         }
         return null
     }
-
-    private const val COMPACT_PANEL = "com.android.systemui.volume.view.standard.VolumePanelView"
-    private const val ROW_CLASS = "com.android.systemui.volume.view.VolumeRowView"
 }
