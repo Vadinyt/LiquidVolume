@@ -51,6 +51,7 @@ class LiquidVolumeEntry : XposedModule() {
         inspectVolumeFields(loader)
         inspectWindowStructure(loader)
         inspectNativeBlur(loader)
+        observeNativeBlur(loader)
         missing.forEach { log(Log.WARN, TAG, "MISSING $it") }
         log(Log.INFO, TAG, "Diagnostic-only build: no hooks installed; native audio path untouched")
     }
@@ -180,6 +181,44 @@ class LiquidVolumeEntry : XposedModule() {
             log(Log.WARN, TAG, "BLUR_INSPECTION_FAILED ${e.javaClass.simpleName}: ${e.message}")
         }
         log(Log.INFO, TAG, "Native blur inspection complete; no hooks or UI modifications")
+    }
+
+    /** Observe Samsung's own blur arguments without changing the result or view. */
+    private fun observeNativeBlur(loader: ClassLoader) {
+        try {
+            val panel = Class.forName("com.android.systemui.volume.view.standard.VolumePanelView", false, loader)
+            val effectType = panel.declaredFields.firstOrNull { it.name == "blurEffect" }?.type
+                ?: run {
+                    log(Log.WARN, TAG, "BLUR_HOOK_SKIPPED blurEffect field missing")
+                    return
+                }
+            val method = effectType.declaredMethods.firstOrNull {
+                it.name == "setRealTimeBlur" && it.parameterTypes.size == 4 &&
+                    android.view.View::class.java.isAssignableFrom(it.parameterTypes[0]) &&
+                    it.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                    it.parameterTypes[2] == Float::class.javaPrimitiveType &&
+                    it.parameterTypes[3] == Int::class.javaPrimitiveType
+            } ?: run {
+                log(Log.WARN, TAG, "BLUR_HOOK_SKIPPED signature mismatch")
+                return
+            }
+            val count = java.util.concurrent.atomic.AtomicInteger(0)
+            hook(method).setId("liquidvolume.blur.observe").intercept { chain ->
+                val index = count.incrementAndGet()
+                if (index <= 20) {
+                    try {
+                        val args = chain.args
+                        log(Log.INFO, TAG, "BLUR_CALL #$index radiusOrInt1=${args[1]} opacityOrFloat=${args[2]} int3=${args[3]} viewType=${args[0]?.javaClass?.simpleName}")
+                    } catch (e: Throwable) {
+                        log(Log.WARN, TAG, "BLUR_CALL_LOG_FAILED ${e.javaClass.simpleName}")
+                    }
+                }
+                chain.proceed()
+            }
+            log(Log.INFO, TAG, "BLUR_HOOK_INSTALLED observation only; no values changed")
+        } catch (e: Throwable) {
+            log(Log.WARN, TAG, "BLUR_HOOK_FAILED ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 
     companion object {
