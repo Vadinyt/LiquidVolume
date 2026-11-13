@@ -231,6 +231,13 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             field = value
             invalidate()
         }
+
+    /** Keep the original large iOS design as the default preview. */
+    var useNativeDimensions: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
     private var level = 0f
     private val density = resources.displayMetrics.density
@@ -279,8 +286,14 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
 
         // Deliberately enlarged, elegant design preview as in the original 0.17.
         // Samsung's real compact panel remains at its actual smaller native size.
-        val pillW = min(81f * density, w * 0.29f)
-        val pillH = min(345f * density, h * 0.79f)
+        val pillW = min(
+            (if (useNativeDimensions) 42f else 81f) * density,
+            w * (if (useNativeDimensions) 0.22f else 0.29f)
+        )
+        val pillH = min(
+            (if (useNativeDimensions) 210f else 345f) * density,
+            h * (if (useNativeDimensions) 0.75f else 0.79f)
+        )
         sliderRect.set(w * 0.69f - pillW * 0.5f,
             (h - pillH) * 0.5f,
             w * 0.69f + pillW * 0.5f, (h + pillH) * 0.5f)
