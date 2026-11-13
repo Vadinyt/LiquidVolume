@@ -31,143 +31,44 @@ import kotlin.math.min
 object LiquidGlassVisual {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    fun draw(canvas: Canvas, outer: RectF, level: Float, muted: Boolean, density: Float) {
-        if (outer.width() <= 0f || outer.height() <= 0f) return
-        val r = outer.width() * 0.5f
-        val fraction = level.coerceIn(0f, 1f)
-        val saved = canvas.save()
-
-        // Optical body: light passes through the capsule. No opaque gray backing.
-        paint.reset()
-        paint.isAntiAlias = true
-        paint.style = Paint.Style.FILL
-        paint.shader = LinearGradient(
-            outer.left, outer.top, outer.right, outer.bottom,
-            intArrayOf(0x94FFFFFF.toInt(), 0x55EDF5FF, 0x62D9EAFF, 0x86FFFFFF.toInt()),
-            floatArrayOf(0f, 0.32f, 0.68f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(outer, r, r, paint)
-
-        val clip = Path().apply { addRoundRect(outer, r, r, Path.Direction.CW) }
-        canvas.clipPath(clip)
-
-        // Curved internal reflection, deliberately asymmetrical like polished glass.
-        paint.shader = RadialGradient(
-            outer.left + outer.width() * 0.13f,
-            outer.top + outer.height() * 0.26f,
-            outer.height() * 0.66f,
-            intArrayOf(0x46FFFFFF, 0x12DDEEFF, 0x00FFFFFF),
-            floatArrayOf(0f, 0.45f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(outer, r, r, paint)
-
-        // White liquid fill: pronounced top meniscus with a soft translucent body.
-        if (fraction > 0f) {
-            val usableTop = outer.top + outer.width() * 0.74f
-            val usableBottom = outer.bottom - outer.width() * 0.68f
-            val fillTop = usableBottom - (usableBottom - usableTop) * fraction
-            val fill = RectF(outer.left + density * 3f, fillTop,
-                outer.right - density * 3f, outer.bottom - density * 3f)
-            val fr = fill.width() * 0.5f
-            paint.shader = LinearGradient(
-                fill.left, fill.top, fill.right, fill.bottom,
-                intArrayOf(0xDDFEFFFF.toInt(), 0xB9F1FBFF.toInt(), 0xBCE2F1FF.toInt()),
-                null, Shader.TileMode.CLAMP
-            )
-            canvas.drawRoundRect(fill, fr, fr, paint)
-
-            // A delicate bright meniscus line is visible above the current level.
-            paint.shader = null
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = density * 1.2f
-            paint.color = 0xA4FFFFFF.toInt()
-            canvas.drawRoundRect(fill, fr, fr, paint)
-            paint.style = Paint.Style.FILL
-        }
-
-        // Slim inner light streak along the left-hand edge.
-        paint.shader = LinearGradient(
-            outer.left, outer.top, outer.left + outer.width() * 0.27f, outer.top,
-            intArrayOf(0xBFFFFFFF.toInt(), 0x36FFFFFF, 0x00FFFFFF),
-            null, Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(
-            RectF(outer.left + density * 1.5f, outer.top + density * 2f,
-                outer.left + outer.width() * 0.23f, outer.bottom - density * 2f),
-            r, r, paint
-        )
-        canvas.restoreToCount(saved)
-
-        // Fine specular rim; avoid a heavy outline or second capsule.
-        paint.reset()
-        paint.isAntiAlias = true
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = density * 1.15f
-        paint.shader = LinearGradient(
-            outer.left, outer.top, outer.right, outer.bottom,
-            intArrayOf(0xF0FFFFFF.toInt(), 0x95C7EEFF.toInt(), 0x6CFFFFFF, 0xE3FFFFFF.toInt()),
-            null, Shader.TileMode.CLAMP
-        )
-        val inset = density * 0.8f
-        canvas.drawRoundRect(RectF(outer.left + inset, outer.top + inset,
-            outer.right - inset, outer.bottom - inset), r, r, paint)
-        paint.shader = null
-        paint.style = Paint.Style.FILL
-
-        // The menu dots and volume icon remain in the Samsung layout in production.
-        // They are rendered here only for a faithful standalone design preview.
-        drawMenuDots(canvas, outer, density)
-        drawSoundGlyph(canvas, outer, muted, density)
-    }
-
-    /** Same Samsung-compatible control positions in the design preview. */
+    /**
+     * Illustration only: production preserves Samsung's native icons.
+     * The background and rim are the same drawables in both modes.
+     */
     fun drawControls(canvas: Canvas, rect: RectF, muted: Boolean, density: Float) {
-        drawMenuDots(canvas, rect, density)
-        drawSoundGlyph(canvas, rect, muted, density)
-    }
-
-    private fun drawMenuDots(canvas: Canvas, rect: RectF, density: Float) {
         paint.reset()
         paint.isAntiAlias = true
-        paint.color = 0xD81D2633.toInt()
-        val cy = rect.top + rect.width() * 0.54f
-        val radius = max(1.6f * density, rect.width() * 0.034f)
-        for (dx in listOf(-0.24f, 0f, 0.24f)) {
-            canvas.drawCircle(rect.centerX() + dx * rect.width(), cy, radius, paint)
+        paint.color = 0xD829313B.toInt()
+        val y = rect.top + rect.width() * 0.52f
+        val radius = max(1.4f * density, rect.width() * 0.033f)
+        for (offset in floatArrayOf(-0.23f, 0f, 0.23f)) {
+            canvas.drawCircle(rect.centerX() + offset * rect.width(), y, radius, paint)
         }
-    }
 
-    private fun drawSoundGlyph(canvas: Canvas, rect: RectF, muted: Boolean, density: Float) {
-        paint.reset()
-        paint.isAntiAlias = true
-        paint.color = 0xD81D2633.toInt()
-        paint.strokeWidth = density * 2.4f
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.style = Paint.Style.STROKE
+        // Simplified music-note glyph, closer to Samsung's media stream icon.
         val cx = rect.centerX()
-        val cy = rect.bottom - rect.width() * 0.58f
-        val s = rect.width() * 0.18f
-        val glyph = Path().apply {
-            moveTo(cx - s * 1.16f, cy - s * 0.44f)
-            lineTo(cx - s * 0.58f, cy - s * 0.44f)
-            lineTo(cx + s * 0.25f, cy - s * 1.05f)
-            lineTo(cx + s * 0.25f, cy + s * 1.05f)
-            lineTo(cx - s * 0.58f, cy + s * 0.44f)
-            lineTo(cx - s * 1.16f, cy + s * 0.44f)
-            close()
+        val cy = rect.bottom - rect.width() * 0.52f
+        val size = rect.width() * 0.21f
+        paint.style = Paint.Style.FILL
+        canvas.drawOval(
+            RectF(cx - size * 0.62f, cy + size * 0.25f,
+                cx + size * 0.18f, cy + size * 0.73f), paint
+        )
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeJoin = Paint.Join.ROUND
+        paint.strokeWidth = max(1.7f * density, rect.width() * 0.045f)
+        val note = Path().apply {
+            moveTo(cx + size * 0.12f, cy + size * 0.48f)
+            lineTo(cx + size * 0.12f, cy - size * 0.82f)
+            cubicTo(cx + size * 0.8f, cy - size * 0.72f,
+                cx + size * 0.95f, cy - size * 0.21f,
+                cx + size * 0.75f, cy + size * 0.18f)
         }
-        canvas.drawPath(glyph, paint)
+        canvas.drawPath(note, paint)
         if (muted) {
-            canvas.drawLine(cx - s * 1.45f, cy - s * 1.42f,
-                cx + s * 1.56f, cy + s * 1.42f, paint)
-        } else {
-            canvas.drawArc(RectF(cx - s * 0.45f, cy - s,
-                cx + s * 1.15f, cy + s), -62f, 124f, false, paint)
-            canvas.drawArc(RectF(cx - s * 0.44f, cy - s * 1.38f,
-                cx + s * 1.68f, cy + s * 1.38f), -58f, 116f, false, paint)
+            canvas.drawLine(cx - size, cy - size,
+                cx + size, cy + size, paint)
         }
         paint.style = Paint.Style.FILL
     }
@@ -254,12 +155,15 @@ class LiquidGlassShellDrawable : Drawable() {
  * Rim lights do not cover the actual native volume progress or audio icons.
  * The dynamic meniscus reads Samsung's progress but never writes to it.
  */
-class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null) : Drawable() {
+/**
+ * Glass rim: only the capsule outline and a confined TOP reflection.
+ * No horizontal meniscus line or vertical full-height arc.
+ */
+class LiquidGlassRimDrawable : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val rimRect = RectF()
-    private val sideRect = RectF()
-    private val meniscusRect = RectF()
+    private val topArc = RectF()
     private var rimShader: Shader? = null
     private var overallAlpha = 255
     private var filter: ColorFilter? = null
@@ -271,15 +175,18 @@ class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null
             rimShader = null
             return
         }
-        val stroke = max(1.4f, rect.width() * 0.012f)
+        val stroke = max(1.0f, rect.width() * 0.010f)
         rimRect.set(rect.left + stroke * 0.5f, rect.top + stroke * 0.5f,
             rect.right - stroke * 0.5f, rect.bottom - stroke * 0.5f)
         val inset = rect.width() * 0.075f
-        sideRect.set(rect.left + inset, rect.top + inset,
-            rect.right - inset, rect.bottom - inset)
+        topArc.set(rect.left + inset, rect.top + inset,
+            rect.right - inset, rect.top + rect.width() - inset)
         rimShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(0xEFFFFFFF.toInt(), 0x9AF8FFFF.toInt(), 0x55CDE8FF, 0xD4FFFFFF.toInt()),
+            intArrayOf(
+                0xD5FFFFFF.toInt(), 0x87EFFBFF.toInt(),
+                0x45BEE5FF, 0x96FFFFFF.toInt()
+            ),
             null, Shader.TileMode.CLAMP
         )
     }
@@ -292,36 +199,15 @@ class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null
         brush.alpha = overallAlpha
         brush.colorFilter = filter
         brush.style = Paint.Style.STROKE
-        brush.strokeWidth = max(1.4f, rect.width() * 0.012f)
+        brush.strokeWidth = max(1.0f, rect.width() * 0.010f)
         brush.shader = rimShader
         canvas.drawRoundRect(rimRect, radius, radius, brush)
 
+        // Short specular highlight confined to the top semicircle.
         brush.shader = null
-        brush.color = 0xAAFFFFFF.toInt()
-        brush.strokeWidth = max(0.8f, rect.width() * 0.009f)
-        canvas.drawArc(sideRect, 128f, 105f, false, brush)
-
-        val fraction = try {
-            progressFraction?.invoke()?.coerceIn(0f, 1f) ?: 0f
-        } catch (_: Throwable) {
-            0f
-        }
-        if (fraction > 0.015f && fraction < 0.985f) {
-            val y = rect.bottom - radius - (rect.height() - radius * 2f) * fraction
-            meniscusRect.set(
-                rect.left + rect.width() * 0.09f,
-                y - max(1.2f, rect.width() * 0.018f),
-                rect.right - rect.width() * 0.09f,
-                y + max(2.2f, rect.width() * 0.045f)
-            )
-            brush.style = Paint.Style.FILL
-            brush.color = 0x42FFFFFF
-            canvas.drawOval(meniscusRect, brush)
-            brush.style = Paint.Style.STROKE
-            brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
-            brush.color = 0xC9FFFFFF.toInt()
-            canvas.drawArc(meniscusRect, 188f, 164f, false, brush)
-        }
+        brush.color = 0x8FFFFFFF.toInt()
+        brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
+        canvas.drawArc(topArc, 210f, 115f, false, brush)
         brush.style = Paint.Style.FILL
     }
 
@@ -345,7 +231,7 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
     private val density = resources.displayMetrics.density
     private val sliderRect = RectF()
     private val shell = LiquidGlassShellDrawable()
-    private val rim = LiquidGlassRimDrawable { level }
+    private val rim = LiquidGlassRimDrawable()
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     init {
@@ -379,8 +265,8 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         brush.shader = null
 
         // Compact volume strip matches the narrow native Samsung footprint.
-        val pillW = min(81f * density, w * 0.29f)
-        val pillH = min(345f * density, h * 0.79f)
+        val pillW = min(42f * density, w * 0.22f)
+        val pillH = min(210f * density, h * 0.75f)
         sliderRect.set(w * 0.69f - pillW * 0.5f,
             (h - pillH) * 0.5f,
             w * 0.69f + pillW * 0.5f, (h + pillH) * 0.5f)
