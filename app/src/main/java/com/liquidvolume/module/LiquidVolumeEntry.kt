@@ -63,6 +63,9 @@ class LiquidVolumeEntry : XposedModule() {
                         if (row != null) {
                             val visibleBlur = activateExistingBlur(blurView)
                             val (tracks, backgrounds) = styleActualSlider(row, blurView)
+                            blurView.postDelayed({
+                                try { styleActualSlider(row, blurView) } catch (_: Throwable) { }
+                            }, 120L)
                             if (logged.incrementAndGet() <= 6) {
                                 log(Log.INFO, TAG, "GLASS_RENDER row=${row.width}x${row.height} " +
                                     "blurVisible=$visibleBlur seekbars=$tracks surfaces=$backgrounds")
@@ -124,6 +127,7 @@ class LiquidVolumeEntry : XposedModule() {
                 val drawable = view.progressDrawable
                 if (drawable is LayerDrawable) {
                     val track = drawable.findDrawableByLayerId(android.R.id.background)
+                        ?: if (drawable.numberOfLayers > 1) drawable.getDrawable(0) else null
                     if (track != null) {
                         track.mutate().setTint(GLASS_TINT)
                         seekbars++
@@ -137,7 +141,7 @@ class LiquidVolumeEntry : XposedModule() {
 
             // The compact face is ~118x591px; its row is ~223x712px.
             // Never recolor the row itself, panel, window, or small icon views.
-            if (view is ImageView || view is TextView || view is ViewGroup &&
+            if (view is TextView || view is ViewGroup &&
                 (view.width > blurView.width * 1.35f || view.height < blurView.height * 0.70f)
             ) continue
             if (view.width < blurView.width * 0.65f ||
