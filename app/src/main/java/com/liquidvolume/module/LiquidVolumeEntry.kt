@@ -49,6 +49,7 @@ class LiquidVolumeEntry : XposedModule() {
         present.forEach { log(Log.INFO, TAG, "FOUND $it") }
         inspectVolumeMethods(loader)
         inspectVolumeFields(loader)
+        inspectWindowStructure(loader)
         missing.forEach { log(Log.WARN, TAG, "MISSING $it") }
         log(Log.INFO, TAG, "Diagnostic-only build: no hooks installed; native audio path untouched")
     }
@@ -116,6 +117,36 @@ class LiquidVolumeEntry : XposedModule() {
             }
         }
         log(Log.INFO, TAG, "Phase 0.4 inspection complete; no hooks installed")
+    }
+
+    /** Read-only inventory of the Samsung standard volume window and its view types. */
+    private fun inspectWindowStructure(loader: ClassLoader) {
+        val targets = listOf(
+            "com.android.systemui.volume.view.standard.VolumePanelWindow",
+            "com.android.systemui.volume.view.standard.VolumePanelView",
+            "com.android.systemui.volume.view.standard.VolumePanelRowView"
+        )
+        for (name in targets) {
+            try {
+                val type = Class.forName(name, false, loader)
+                log(Log.INFO, TAG, "WINDOW_CLASS_FOUND $name superclass=${type.superclass?.name}")
+                type.declaredConstructors.take(5).forEach {
+                    log(Log.INFO, TAG, "WINDOW_CONSTRUCTOR ${type.simpleName}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }})")
+                }
+                type.declaredFields.sortedBy { it.name }.take(35).forEach {
+                    log(Log.INFO, TAG, "WINDOW_FIELD ${type.simpleName}.${it.name}:${it.type.name}")
+                }
+                type.declaredMethods.filter {
+                    val n = it.name.lowercase()
+                    listOf("show", "dismiss", "create", "inflate", "view", "window", "background", "blur", "attach", "layout").any(n::contains)
+                }.sortedBy { it.name }.take(35).forEach {
+                    log(Log.INFO, TAG, "WINDOW_METHOD ${type.simpleName}.${it.name}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }}):${it.returnType.simpleName}")
+                }
+            } catch (e: Throwable) {
+                log(Log.WARN, TAG, "WINDOW_CLASS_MISSING $name: ${e.javaClass.simpleName}")
+            }
+        }
+        log(Log.INFO, TAG, "Window structure inventory complete; visual changes disabled")
     }
 
     companion object {
