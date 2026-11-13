@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
@@ -177,31 +178,32 @@ object LiquidGlassVisual {
  */
 class LiquidGlassShellDrawable : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rect = RectF()
+    private val clipping = Path()
+    private var backgroundShader: Shader? = null
+    private var depthShader: Shader? = null
     private var overallAlpha = 255
-    private var colorFilterValue: ColorFilter? = null
+    private var filter: ColorFilter? = null
 
-    override fun draw(canvas: Canvas) {
-        val rect = RectF(bounds)
-        if (rect.isEmpty) return
-        val radius = rect.width() / 2f
-        val saved = canvas.save()
-        val path = Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) }
-        canvas.clipPath(path)
-
-        // Layered pearl-glass material with softly changing translucency.
-        brush.reset()
-        brush.isAntiAlias = true
-        brush.alpha = overallAlpha
-        brush.colorFilter = colorFilterValue
-        brush.shader = LinearGradient(
+    // Cache shaders/clip once when Samsung lays out the native capsule.
+    override fun onBoundsChange(bounds: Rect) {
+        super.onBoundsChange(bounds)
+        rect.set(bounds)
+        clipping.reset()
+        if (rect.isEmpty) {
+            backgroundShader = null
+            depthShader = null
+            return
+        }
+        val radius = rect.width() * 0.5f
+        clipping.addRoundRect(rect, radius, radius, Path.Direction.CW)
+        backgroundShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
             intArrayOf(0xA8FFFFFF.toInt(), 0x75F0F8FF, 0x4BDAEBFF, 0x8CFFFFFF.toInt()),
             floatArrayOf(0f, 0.30f, 0.68f, 1f),
             Shader.TileMode.CLAMP
         )
-        canvas.drawRoundRect(rect, radius, radius, brush)
-
-        brush.shader = RadialGradient(
+        depthShader = RadialGradient(
             rect.left + rect.width() * 0.14f,
             rect.top + rect.height() * 0.30f,
             max(rect.width(), rect.height() * 0.60f),
@@ -209,9 +211,23 @@ class LiquidGlassShellDrawable : Drawable() {
             floatArrayOf(0f, 0.44f, 1f),
             Shader.TileMode.CLAMP
         )
+    }
+
+    override fun draw(canvas: Canvas) {
+        if (rect.isEmpty) return
+        val saved = canvas.save()
+        canvas.clipPath(clipping)
+        brush.reset()
+        brush.isAntiAlias = true
+        brush.alpha = overallAlpha
+        brush.colorFilter = filter
+        val radius = rect.width() * 0.5f
+        brush.shader = backgroundShader
         canvas.drawRoundRect(rect, radius, radius, brush)
-        canvas.restoreToCount(saved)
+        brush.shader = depthShader
+        canvas.drawRoundRect(rect, radius, radius, brush)
         brush.shader = null
+        canvas.restoreToCount(saved)
     }
 
     override fun setAlpha(alpha: Int) {
@@ -220,7 +236,7 @@ class LiquidGlassShellDrawable : Drawable() {
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        colorFilterValue = colorFilter
+        filter = colorFilter
         invalidateSelf()
     }
 
@@ -229,69 +245,76 @@ class LiquidGlassShellDrawable : Drawable() {
 }
 
 /**
- * Optical edge highlights, drawn above the native seekbar but never across
- * its center. This does not alter layout or consume any touch events.
+ * Rim lights do not cover the actual native volume progress or audio icons.
+ * The dynamic meniscus reads Samsung's progress but never writes to it.
  */
 class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null) : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rect = RectF()
+    private val rimRect = RectF()
+    private val sideRect = RectF()
+    private val meniscusRect = RectF()
+    private var rimShader: Shader? = null
     private var overallAlpha = 255
-    private var colorFilterValue: ColorFilter? = null
+    private var filter: ColorFilter? = null
+
+    override fun onBoundsChange(bounds: Rect) {
+        super.onBoundsChange(bounds)
+        rect.set(bounds)
+        if (rect.isEmpty) {
+            rimShader = null
+            return
+        }
+        val stroke = max(1.4f, rect.width() * 0.012f)
+        rimRect.set(rect.left + stroke * 0.5f, rect.top + stroke * 0.5f,
+            rect.right - stroke * 0.5f, rect.bottom - stroke * 0.5f)
+        val inset = rect.width() * 0.075f
+        sideRect.set(rect.left + inset, rect.top + inset,
+            rect.right - inset, rect.bottom - inset)
+        rimShader = LinearGradient(
+            rect.left, rect.top, rect.right, rect.bottom,
+            intArrayOf(0xEFFFFFFF.toInt(), 0x9AF8FFFF.toInt(), 0x55CDE8FF, 0xD4FFFFFF.toInt()),
+            null, Shader.TileMode.CLAMP
+        )
+    }
 
     override fun draw(canvas: Canvas) {
-        val rect = RectF(bounds)
         if (rect.isEmpty) return
         val radius = rect.width() * 0.5f
-        val border = max(1.4f, rect.width() * 0.012f)
         brush.reset()
         brush.isAntiAlias = true
         brush.alpha = overallAlpha
-        brush.colorFilter = colorFilterValue
+        brush.colorFilter = filter
         brush.style = Paint.Style.STROKE
-        brush.strokeWidth = border
-        brush.shader = LinearGradient(
-            rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(0xEFFFFFFF.toInt(), 0x9AF8FFFF.toInt(), 0x55CDE8FF, 0xD4FFFFFF.toInt()),
-            null,
-            Shader.TileMode.CLAMP
-        )
-        val inset = border * 0.5f
-        canvas.drawRoundRect(
-            RectF(rect.left + inset, rect.top + inset,
-                rect.right - inset, rect.bottom - inset),
-            radius, radius, brush
-        )
+        brush.strokeWidth = max(1.4f, rect.width() * 0.012f)
+        brush.shader = rimShader
+        canvas.drawRoundRect(rimRect, radius, radius, brush)
 
-        // Very thin optical reflection on the left edge of the capsule.
         brush.shader = null
         brush.color = 0xAAFFFFFF.toInt()
         brush.strokeWidth = max(0.8f, rect.width() * 0.009f)
-        val leftInset = rect.width() * 0.075f
-        canvas.drawArc(
-            RectF(rect.left + leftInset, rect.top + leftInset,
-                rect.right - leftInset, rect.bottom - leftInset),
-            128f, 105f, false, brush
-        )
-        // Dynamic liquid meniscus: follows Samsung's actual progress without
-        // changing the seekbar drawable, touch handling, or volume value.
-        val fraction = try { progressFraction?.invoke()?.coerceIn(0f, 1f) ?: 0f }
-            catch (_: Throwable) { 0f }
+        canvas.drawArc(sideRect, 128f, 105f, false, brush)
+
+        val fraction = try {
+            progressFraction?.invoke()?.coerceIn(0f, 1f) ?: 0f
+        } catch (_: Throwable) {
+            0f
+        }
         if (fraction > 0.015f && fraction < 0.985f) {
-            val cap = radius
-            val y = (rect.bottom - cap) - (rect.height() - cap * 2f) * fraction
-            val lens = RectF(
+            val y = rect.bottom - radius - (rect.height() - radius * 2f) * fraction
+            meniscusRect.set(
                 rect.left + rect.width() * 0.09f,
                 y - max(1.2f, rect.width() * 0.018f),
                 rect.right - rect.width() * 0.09f,
                 y + max(2.2f, rect.width() * 0.045f)
             )
-            brush.shader = null
             brush.style = Paint.Style.FILL
             brush.color = 0x42FFFFFF
-            canvas.drawOval(lens, brush)
+            canvas.drawOval(meniscusRect, brush)
             brush.style = Paint.Style.STROKE
             brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
             brush.color = 0xC9FFFFFF.toInt()
-            canvas.drawArc(lens, 188f, 164f, false, brush)
+            canvas.drawArc(meniscusRect, 188f, 164f, false, brush)
         }
         brush.style = Paint.Style.FILL
     }
@@ -302,7 +325,7 @@ class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        colorFilterValue = colorFilter
+        filter = colorFilter
         invalidateSelf()
     }
 
