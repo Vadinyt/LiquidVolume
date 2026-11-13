@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-dev"
+        versionCode = 3
+        versionName = "0.3.0-dev"
     }
     buildFeatures { buildConfig = true }
     compileOptions {
