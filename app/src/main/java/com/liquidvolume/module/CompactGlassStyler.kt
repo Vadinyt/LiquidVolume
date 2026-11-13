@@ -29,10 +29,9 @@ internal object CompactGlassStyler {
 
     private data class State(
         val background: Drawable?,
-        val foreground: Drawable?,
         val shell: LiquidGlassShellDrawable,
         val rim: LiquidGlassRimDrawable,
-        val compositedForeground: Drawable
+        val compositedBackground: Drawable
     )
 
     fun apply(compactPanel: View, blurView: View): Boolean {
@@ -55,33 +54,27 @@ internal object CompactGlassStyler {
         val existing = track.getTag(STATE_TAG) as? State
         if (existing != null) {
             // OneUI may restore the stock background on show; reapply only then.
-            if (track.background !== existing.shell) track.background = existing.shell
-            if (track.foreground !== existing.compositedForeground) {
-                track.foreground = existing.compositedForeground
+            if (track.background !== existing.compositedBackground) {
+                track.background = existing.compositedBackground
             }
             return true
         }
 
-        val originalForeground = track.foreground
+        val glassShell = LiquidGlassShellDrawable()
         val glassRim = LiquidGlassRimDrawable()
         val state = State(
             background = track.background,
-            foreground = originalForeground,
-            shell = LiquidGlassShellDrawable(),
+            shell = glassShell,
             rim = glassRim,
-            compositedForeground = if (originalForeground != null) {
-                // Preserve Samsung's native foreground/ripple. The optical rim
-                // is only an extra visual layer, not a replacement.
-                LayerDrawable(arrayOf(originalForeground, glassRim))
-            } else {
-                glassRim
-            }
+            // Glass drawing sits below Samsung's original seekbar and foreground.
+            // Keeping the vendor foreground instance untouched preserves ripple
+            // and press-state handling more reliably than wrapping it.
+            compositedBackground = LayerDrawable(arrayOf(glassShell, glassRim))
         )
         try {
-            // Layer 1: pearl glass body behind Samsung's original progress drawable.
-            track.background = state.shell
-            // Layer 2: highlights are strokes only, leaving progress/icons visible.
-            track.foreground = state.compositedForeground
+            // The glass body and border are a single background layer.
+            // No changes to Samsung's native foreground, icons or slider.
+            track.background = state.compositedBackground
             // Samsung's original volume_seekbar_drawable_no_blur has a genuine
             // white gradient and custom SecRoundedCornerSeekBarDrawable. Keep it
             // intact instead of tinting it flat, which also reduces crash risk.
@@ -103,7 +96,6 @@ internal object CompactGlassStyler {
     private fun restore(track: ViewGroup, state: State) {
         try {
             track.background = state.background
-            track.foreground = state.foreground
             track.setTag(STATE_TAG, null)
         } catch (ignored: Throwable) {
             Log.w(TAG, "GLASS_RESTORE_FAILED ${ignored.javaClass.simpleName}")
