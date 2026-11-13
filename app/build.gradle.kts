@@ -12,6 +12,19 @@ android {
         versionCode = 3
         versionName = "0.3.0-dev"
     }
+    signingConfigs {
+        create("persistentDebug") {
+            storeFile = rootProject.file("liquidvolume-signing.jks")
+            storePassword = System.getenv("LV_KEYSTORE_PASSWORD") ?: ""
+            keyAlias = "liquidvolume"
+            keyPassword = System.getenv("LV_KEY_PASSWORD") ?: ""
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("persistentDebug")
+        }
+    }
     buildFeatures { buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
