@@ -1,6 +1,5 @@
 package com.liquidvolume.module
 
-import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
 import android.util.Log
 import android.view.View
@@ -27,15 +26,9 @@ internal object CompactGlassStyler {
     private const val STATE_TAG = 0x7f0a7e10
     private const val TAG = "LiquidVolume"
 
-    // A neutral white liquid volume fill. Samsung retains control of progress.
-    private val fillTint = ColorStateList.valueOf(0xE5F7FCFF.toInt())
-    private val emptyTint = ColorStateList.valueOf(0x0BFFFFFF)
-
     private data class State(
         val background: Drawable?,
         val foreground: Drawable?,
-        val progressTint: ColorStateList?,
-        val emptyTint: ColorStateList?,
         val shell: LiquidGlassShellDrawable,
         val rim: LiquidGlassRimDrawable
     )
@@ -62,18 +55,12 @@ internal object CompactGlassStyler {
             // OneUI may restore the stock background on show; reapply only then.
             if (track.background !== existing.shell) track.background = existing.shell
             if (track.foreground !== existing.rim) track.foreground = existing.rim
-            if (slider.progressTintList != fillTint) slider.progressTintList = fillTint
-            if (slider.progressBackgroundTintList != emptyTint) {
-                slider.progressBackgroundTintList = emptyTint
-            }
             return true
         }
 
         val state = State(
             background = track.background,
             foreground = track.foreground,
-            progressTint = slider.progressTintList,
-            emptyTint = slider.progressBackgroundTintList,
             shell = LiquidGlassShellDrawable(),
             rim = LiquidGlassRimDrawable {
                 if (slider.max > 0) slider.progress.toFloat() / slider.max else 0f
@@ -84,10 +71,9 @@ internal object CompactGlassStyler {
             track.background = state.shell
             // Layer 2: highlights are strokes only, leaving progress/icons visible.
             track.foreground = state.rim
-            // Layer 3: colorize stock drawable; never replace it or its listeners.
-            slider.progressTintList = fillTint
-            slider.progressBackgroundTintList = emptyTint
-
+            // Samsung's original volume_seekbar_drawable_no_blur has a genuine
+            // white gradient and custom SecRoundedCornerSeekBarDrawable. Keep it
+            // intact instead of tinting it flat, which also reduces crash risk.
             // Avoid clipToOutline changes: they can clip the rotating seekbar and
             // create renderer issues on Samsung's vendor SystemUI builds.
             track.setTag(STATE_TAG, state)
@@ -97,18 +83,16 @@ internal object CompactGlassStyler {
             return true
         } catch (error: Throwable) {
             // Atomic-ish rollback if Samsung rejects any nonessential visual API.
-            restore(track, slider, state)
+            restore(track, state)
             Log.w(TAG, "GLASS_STYLE_ROLLED_BACK ${error.javaClass.simpleName}: ${error.message}")
             return false
         }
     }
 
-    private fun restore(track: ViewGroup, slider: ProgressBar, state: State) {
+    private fun restore(track: ViewGroup, state: State) {
         try {
             track.background = state.background
             track.foreground = state.foreground
-            slider.progressTintList = state.progressTint
-            slider.progressBackgroundTintList = state.emptyTint
             track.setTag(STATE_TAG, null)
         } catch (ignored: Throwable) {
             Log.w(TAG, "GLASS_RESTORE_FAILED ${ignored.javaClass.simpleName}")
