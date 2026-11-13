@@ -90,6 +90,8 @@ class LiquidVolumeEntry : XposedModule() {
             blurView.visibility = View.VISIBLE
         }
 
+        if (track.getTag(INSTALLED_TAG) == true) return true
+
         // The ORIGINAL narrow slider FrameLayout receives the white glass.
         // Unlike v0.10, the outer VolumePanelView and full-width row stay untouched.
         val glass = GradientDrawable(
