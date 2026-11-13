@@ -253,7 +253,7 @@ class LiquidVolumeEntry : XposedModule() {
                                     ).apply {
                                         shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                                         cornerRadius = view.width / 2f
-                                        setStroke(2, 0x88FFFFFF)
+                                        setStroke(2, 0x88FFFFFF.toInt())
                                     }
                                     view.foreground = sheen
                                     view.setTag(0x7e0a0001, true)
