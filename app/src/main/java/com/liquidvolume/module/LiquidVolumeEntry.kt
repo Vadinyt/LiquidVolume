@@ -50,6 +50,7 @@ class LiquidVolumeEntry : XposedModule() {
         inspectVolumeMethods(loader)
         inspectVolumeFields(loader)
         inspectWindowStructure(loader)
+        inspectNativeBlur(loader)
         missing.forEach { log(Log.WARN, TAG, "MISSING $it") }
         log(Log.INFO, TAG, "Diagnostic-only build: no hooks installed; native audio path untouched")
     }
@@ -147,6 +148,38 @@ class LiquidVolumeEntry : XposedModule() {
             }
         }
         log(Log.INFO, TAG, "Window structure inventory complete; visual changes disabled")
+    }
+
+    /** Reflection-only native blur inventory; never invokes Samsung blur APIs. */
+    private fun inspectNativeBlur(loader: ClassLoader) {
+        val viewName = "com.android.systemui.volume.view.standard.VolumePanelView"
+        try {
+            val panel = Class.forName(viewName, false, loader)
+            val blurFields = panel.declaredFields.filter {
+                it.name.contains("blur", ignoreCase = true) ||
+                    it.type.name.contains("Blur", ignoreCase = true)
+            }
+            for (field in blurFields) {
+                log(Log.INFO, TAG, "BLUR_FIELD ${field.name}:${field.type.name}")
+                val type = field.type
+                log(Log.INFO, TAG, "BLUR_TYPE ${type.name} superclass=${type.superclass?.name}")
+                type.declaredMethods.sortedBy { it.name }.take(40).forEach { method ->
+                    log(Log.INFO, TAG, "BLUR_METHOD ${type.simpleName}.${method.name}(${method.parameterTypes.joinToString(",") { it.simpleName }}):${method.returnType.simpleName}")
+                }
+                type.declaredFields.sortedBy { it.name }.take(25).forEach {
+                    log(Log.INFO, TAG, "BLUR_MEMBER ${type.simpleName}.${it.name}:${it.type.name}")
+                }
+            }
+            panel.declaredMethods.filter {
+                val n = it.name.lowercase()
+                n.contains("blur") || n.contains("background") || n.contains("draw") || n.contains("alpha")
+            }.sortedBy { it.name }.take(30).forEach {
+                log(Log.INFO, TAG, "PANEL_VISUAL_METHOD ${it.name}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }}):${it.returnType.simpleName}")
+            }
+        } catch (e: Throwable) {
+            log(Log.WARN, TAG, "BLUR_INSPECTION_FAILED ${e.javaClass.simpleName}: ${e.message}")
+        }
+        log(Log.INFO, TAG, "Native blur inspection complete; no hooks or UI modifications")
     }
 
     companion object {
