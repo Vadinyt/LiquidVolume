@@ -75,7 +75,9 @@ internal object CompactGlassStyler {
             progressTint = slider.progressTintList,
             emptyTint = slider.progressBackgroundTintList,
             shell = LiquidGlassShellDrawable(),
-            rim = LiquidGlassRimDrawable()
+            rim = LiquidGlassRimDrawable {
+                if (slider.max > 0) slider.progress.toFloat() / slider.max else 0f
+            }
         )
         try {
             // Layer 1: pearl glass body behind Samsung's original progress drawable.
