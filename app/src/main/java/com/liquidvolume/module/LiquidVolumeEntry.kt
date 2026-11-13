@@ -48,6 +48,7 @@ class LiquidVolumeEntry : XposedModule() {
         log(Log.INFO, TAG, "SystemUI class scan: ${present.size}/${candidates.size} candidates present")
         present.forEach { log(Log.INFO, TAG, "FOUND $it") }
         inspectVolumeMethods(loader)
+        inspectVolumeFields(loader)
         missing.forEach { log(Log.WARN, TAG, "MISSING $it") }
         log(Log.INFO, TAG, "Diagnostic-only build: no hooks installed; native audio path untouched")
     }
@@ -84,6 +85,37 @@ class LiquidVolumeEntry : XposedModule() {
             }
         }
         log(Log.INFO, TAG, "Method inventory complete; no hooks installed")
+    }
+
+    /** Identify view/dialog references without reading live instance state. */
+    private fun inspectVolumeFields(loader: ClassLoader) {
+        val targets = listOf(
+            "com.android.systemui.volume.SamsungVolumeDialogImpl",
+            "com.android.systemui.volume.VolumePanelDialogDelegate",
+            "com.android.systemui.volume.VolumePanelImpl",
+            "com.android.systemui.volume.dialog.ui.binder.VolumeDialogViewBinder"
+        )
+        for (name in targets) {
+            try {
+                val type = Class.forName(name, false, loader)
+                val fields = type.declaredFields
+                    .filter { field ->
+                        val n = field.name.lowercase()
+                        val t = field.type.name.lowercase()
+                        listOf("view", "dialog", "window", "panel", "slider", "volume", "blur", "background")
+                            .any { n.contains(it) || t.contains(it) }
+                    }
+                    .sortedBy { it.name }
+                    .take(24)
+                log(Log.INFO, TAG, "FIELD_SCAN ${type.simpleName}: ${fields.size} selected fields")
+                for (field in fields) {
+                    log(Log.INFO, TAG, "FIELD ${type.simpleName}.${field.name}:${field.type.name}")
+                }
+            } catch (e: Throwable) {
+                log(Log.WARN, TAG, "FIELD_SCAN_FAILED $name: ${e.javaClass.simpleName}")
+            }
+        }
+        log(Log.INFO, TAG, "Phase 0.4 inspection complete; no hooks installed")
     }
 
     companion object {
