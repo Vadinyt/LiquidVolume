@@ -122,6 +122,12 @@ object LiquidGlassVisual {
         drawSoundGlyph(canvas, outer, muted, density)
     }
 
+    /** Same Samsung-compatible control positions in the design preview. */
+    fun drawControls(canvas: Canvas, rect: RectF, muted: Boolean, density: Float) {
+        drawMenuDots(canvas, rect, density)
+        drawSoundGlyph(canvas, rect, muted, density)
+    }
+
     private fun drawMenuDots(canvas: Canvas, rect: RectF, density: Float) {
         paint.reset()
         paint.isAntiAlias = true
@@ -338,9 +344,11 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
     private var level = 0.38f
     private val density = resources.displayMetrics.density
     private val sliderRect = RectF()
+    private val shell = LiquidGlassShellDrawable()
+    private val rim = LiquidGlassRimDrawable { level }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     init {
-        setLayerType(LAYER_TYPE_SOFTWARE, null)
         contentDescription = "Liquid Glass volume design preview"
     }
 
@@ -376,7 +384,41 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         sliderRect.set(w * 0.69f - pillW * 0.5f,
             (h - pillH) * 0.5f,
             w * 0.69f + pillW * 0.5f, (h + pillH) * 0.5f)
-        LiquidGlassVisual.draw(canvas, sliderRect, level, level <= 0.01f, density)
+        // Preview and SystemUI now use exactly the same shell and rim drawables.
+        // Only the progress body is simulated here, Samsung owns it in SystemUI.
+        shell.setBounds(
+            sliderRect.left.toInt(), sliderRect.top.toInt(),
+            sliderRect.right.toInt(), sliderRect.bottom.toInt()
+        )
+        shell.draw(canvas)
+
+        if (level > 0f) {
+            val cap = sliderRect.width() * 0.5f
+            val top = sliderRect.top + cap * 0.9f
+            val bottom = sliderRect.bottom - cap * 0.82f
+            val fillTop = bottom - (bottom - top) * level
+            val inset = 3f * density
+            val fillRect = RectF(
+                sliderRect.left + inset, fillTop,
+                sliderRect.right - inset, sliderRect.bottom - inset
+            )
+            fillPaint.reset()
+            fillPaint.isAntiAlias = true
+            fillPaint.shader = LinearGradient(
+                fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
+                intArrayOf(0xEAF9FFFF.toInt(), 0xC8F1FAFF.toInt(), 0xDCE8FAFF.toInt()),
+                null, Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(fillRect, fillRect.width() / 2f,
+                fillRect.width() / 2f, fillPaint)
+            fillPaint.shader = null
+        }
+        rim.setBounds(
+            sliderRect.left.toInt(), sliderRect.top.toInt(),
+            sliderRect.right.toInt(), sliderRect.bottom.toInt()
+        )
+        rim.draw(canvas)
+        LiquidGlassVisual.drawControls(canvas, sliderRect, level <= 0.01f, density)
 
         brush.reset()
         brush.isAntiAlias = true
