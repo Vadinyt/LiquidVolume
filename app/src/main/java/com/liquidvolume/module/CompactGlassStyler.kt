@@ -1,6 +1,7 @@
 package com.liquidvolume.module
 
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -30,7 +31,8 @@ internal object CompactGlassStyler {
         val background: Drawable?,
         val foreground: Drawable?,
         val shell: LiquidGlassShellDrawable,
-        val rim: LiquidGlassRimDrawable
+        val rim: LiquidGlassRimDrawable,
+        val compositedForeground: Drawable
     )
 
     fun apply(compactPanel: View, blurView: View): Boolean {
@@ -54,21 +56,32 @@ internal object CompactGlassStyler {
         if (existing != null) {
             // OneUI may restore the stock background on show; reapply only then.
             if (track.background !== existing.shell) track.background = existing.shell
-            if (track.foreground !== existing.rim) track.foreground = existing.rim
+            if (track.foreground !== existing.compositedForeground) {
+                track.foreground = existing.compositedForeground
+            }
             return true
         }
 
+        val originalForeground = track.foreground
+        val glassRim = LiquidGlassRimDrawable()
         val state = State(
             background = track.background,
-            foreground = track.foreground,
+            foreground = originalForeground,
             shell = LiquidGlassShellDrawable(),
-            rim = LiquidGlassRimDrawable()
+            rim = glassRim,
+            compositedForeground = if (originalForeground != null) {
+                // Preserve Samsung's native foreground/ripple. The optical rim
+                // is only an extra visual layer, not a replacement.
+                LayerDrawable(arrayOf(originalForeground, glassRim))
+            } else {
+                glassRim
+            }
         )
         try {
             // Layer 1: pearl glass body behind Samsung's original progress drawable.
             track.background = state.shell
             // Layer 2: highlights are strokes only, leaving progress/icons visible.
-            track.foreground = state.rim
+            track.foreground = state.compositedForeground
             // Samsung's original volume_seekbar_drawable_no_blur has a genuine
             // white gradient and custom SecRoundedCornerSeekBarDrawable. Keep it
             // intact instead of tinting it flat, which also reduces crash risk.
