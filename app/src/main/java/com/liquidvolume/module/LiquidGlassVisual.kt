@@ -106,7 +106,7 @@ class LiquidGlassShellDrawable : Drawable() {
         clipping.addRoundRect(rect, radius, radius, Path.Direction.CW)
         backgroundShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(0xA8FFFFFF.toInt(), 0x75F0F8FF, 0x4BDAEBFF, 0x8CFFFFFF.toInt()),
+            intArrayOf(0x94FFFFFF.toInt(), 0x62F3FBFF, 0x45D8EBFF, 0x7EFFFFFF),
             floatArrayOf(0f, 0.30f, 0.68f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -114,7 +114,7 @@ class LiquidGlassShellDrawable : Drawable() {
             rect.left + rect.width() * 0.14f,
             rect.top + rect.height() * 0.30f,
             max(rect.width(), rect.height() * 0.60f),
-            intArrayOf(0x4BFFFFFF, 0x12EAF8FF, 0x00FFFFFF),
+            intArrayOf(0x36FFFFFF, 0x10EAF8FF, 0x00FFFFFF),
             floatArrayOf(0f, 0.44f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -184,8 +184,8 @@ class LiquidGlassRimDrawable : Drawable() {
         rimShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
             intArrayOf(
-                0xD5FFFFFF.toInt(), 0x87EFFBFF.toInt(),
-                0x45BEE5FF, 0x96FFFFFF.toInt()
+                0xDEFFFFFF.toInt(), 0x8CEFFBFF.toInt(),
+                0x4BBEE5FF, 0xB0FFFFFF.toInt()
             ),
             null, Shader.TileMode.CLAMP
         )
@@ -205,7 +205,7 @@ class LiquidGlassRimDrawable : Drawable() {
 
         // Short specular highlight confined to the top semicircle.
         brush.shader = null
-        brush.color = 0x8FFFFFFF.toInt()
+        brush.color = 0x91FFFFFF.toInt()
         brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
         canvas.drawArc(topArc, 210f, 115f, false, brush)
         brush.style = Paint.Style.FILL
@@ -245,6 +245,20 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
     private val shell = LiquidGlassShellDrawable()
     private val rim = LiquidGlassRimDrawable()
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var backdropShader: Shader? = null
+    private val fillRect = RectF()
+    private var fillShader: Shader? = null
+    private var lastFillTop = Float.NaN
+    private var lastFillBottom = Float.NaN
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        backdropShader = if (w > 0 && h > 0) LinearGradient(
+            0f, 0f, w.toFloat(), h.toFloat(),
+            intArrayOf(0xFF0A1425.toInt(), 0xFF172543.toInt(), 0xFF302547.toInt()),
+            null, Shader.TileMode.CLAMP
+        ) else null
+    }
 
     init {
         contentDescription = "Liquid Glass volume design preview"
@@ -261,9 +275,7 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             brush.color = 0xFF080B11.toInt()
             canvas.drawRect(0f, 0f, w, h, brush)
         } else {
-            brush.shader = LinearGradient(0f, 0f, w, h,
-                intArrayOf(0xFF0A1425.toInt(), 0xFF172543.toInt(), 0xFF302547.toInt()),
-                null, Shader.TileMode.CLAMP)
+            brush.shader = backdropShader
             canvas.drawRect(0f, 0f, w, h, brush)
 
             // Rich colors behind the glass show the color shifts in context.
@@ -311,17 +323,22 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             val bottom = sliderRect.bottom - cap * 0.82f
             val fillTop = bottom - (bottom - top) * level
             val inset = 3f * density
-            val fillRect = RectF(
+            fillRect.set(
                 sliderRect.left + inset, fillTop,
                 sliderRect.right - inset, sliderRect.bottom - inset
             )
             fillPaint.reset()
             fillPaint.isAntiAlias = true
-            fillPaint.shader = LinearGradient(
-                fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
-                intArrayOf(0xBAF7FCFF.toInt(), 0xA6EAF7FF.toInt(), 0xC4EDF8FF.toInt()),
-                null, Shader.TileMode.CLAMP
-            )
+            if (fillTop != lastFillTop || fillRect.bottom != lastFillBottom) {
+                fillShader = LinearGradient(
+                    fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
+                    intArrayOf(0xBAF7FCFF.toInt(), 0xA6EAF7FF.toInt(), 0xC4EDF8FF.toInt()),
+                    null, Shader.TileMode.CLAMP
+                )
+                lastFillTop = fillTop
+                lastFillBottom = fillRect.bottom
+            }
+            fillPaint.shader = fillShader
             canvas.drawRoundRect(fillRect, fillRect.width() / 2f,
                 fillRect.width() / 2f, fillPaint)
             fillPaint.shader = null
