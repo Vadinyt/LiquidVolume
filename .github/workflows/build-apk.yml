@@ -29,8 +29,21 @@ jobs:
             echo "Checking $url"
             curl --location --head --max-time 20 --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' "$url" || true
           done
+      - name: Restore persistent debug signing key
+        env:
+          SIGNING_KEY_B64: ${{ secrets.LV_SIGNING_KEY_B64 }}
+        shell: bash
+        run: |
+          if [ -z "$SIGNING_KEY_B64" ]; then
+            echo "::error::Missing repository secret LV_SIGNING_KEY_B64. Configure it before building."
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY_B64" | base64 --decode > liquidvolume-signing.jks
       - name: Build debug APK
-        run: gradle --no-daemon --refresh-dependencies :app:assembleDebug --stacktrace
+        env:
+          LV_KEYSTORE_PASSWORD: LiquidVolumeDev2026
+          LV_KEY_PASSWORD: LiquidVolumeDev2026
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: LiquidVolume-debug-apk
