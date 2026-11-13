@@ -90,11 +90,15 @@ internal object CompactGlassStyler {
         val rim = LiquidGlassRimDrawable().apply {
             setBounds(0, 0, track.width, track.height)
         }
-        val transparentBase = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 999f
-            setColor(0x06FFFFFF)
-        }
+        // Clone Samsung's original <shape> instead of inventing a replacement
+        // with different intrinsic dimensions. Preserve native size, radius and
+        // layer geometry, changing only the gray fill and outline.
+        val originalShape = backgroundLayer as? GradientDrawable ?: return false
+        val transparentBase =
+            originalShape.constantState?.newDrawable()?.mutate() as? GradientDrawable
+                ?: return false
+        transparentBase.setColor(0x05FFFFFF)
+        transparentBase.setStroke(0, 0x00FFFFFF)
         val state = State(
             originalTrackBackground = track.background,
             progressLayers = layers,
