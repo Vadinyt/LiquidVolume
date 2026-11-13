@@ -45,6 +45,7 @@ class LiquidVolumeEntry : XposedModule() {
             }
 
             val styleFailures = AtomicInteger(0)
+            val skippedLayouts = AtomicInteger(0)
             val successfulStyles = AtomicInteger(0)
             hook(blurMethod).setId("liquidvolume.compact.liquidglass").intercept { chain ->
                 val image = chain.args[0] as? View
@@ -72,8 +73,10 @@ class LiquidVolumeEntry : XposedModule() {
                             if (successfulStyles.incrementAndGet() <= 3) {
                                 log(Log.INFO, TAG, "GLASS_RENDER_SUCCESS on original compact slider")
                             }
-                        } else if (styleFailures.incrementAndGet() == 3) {
-                            log(Log.WARN, TAG, "GLASS_DISABLED: compact layout not compatible")
+                        } else if (skippedLayouts.incrementAndGet() <= 3) {
+                            // An unattached or not-yet-measured view is normal
+                            // during the volume animation, not a module failure.
+                            log(Log.INFO, TAG, "GLASS_LAYOUT_PENDING: native row not ready")
                         }
                     } catch (error: Throwable) {
                         val failures = styleFailures.incrementAndGet()
