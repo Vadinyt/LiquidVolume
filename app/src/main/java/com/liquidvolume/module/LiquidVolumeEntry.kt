@@ -1,17 +1,27 @@
 package com.liquidvolume.module
 
 import android.app.Application
+import android.content.res.ColorStateList
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.TextView
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * One UI compact volume glass: edit only Samsung's native blur tint.
- * No replacement views, audio hooks, dialog resizing or overlays.
+ * Styles Samsung's existing compact volume slider and native backdrop blur.
+ * Does not add a new panel, alter audio handling, or touch expanded volume UI.
  */
 class LiquidVolumeEntry : XposedModule() {
+
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
         super.onModuleLoaded(param)
         log(Log.INFO, TAG, "Loaded: API=${getApiVersion()}")
@@ -22,85 +32,144 @@ class LiquidVolumeEntry : XposedModule() {
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
 
         try {
-            val panel = Class.forName(COMPACT_PANEL, false, param.defaultClassLoader)
-            val effect = panel.declaredFields.firstOrNull { it.name == "blurEffect" }?.type
-                ?: run {
-                    log(Log.WARN, TAG, "GLASS_UNAVAILABLE: Samsung blurEffect field missing")
-                    return
-                }
-            val method = effect.declaredMethods.firstOrNull {
+            val compact = Class.forName(COMPACT_PANEL, false, param.defaultClassLoader)
+            val blurType = compact.declaredFields.firstOrNull { it.name == "blurEffect" }?.type
+                ?: return
+            val blurMethod = blurType.declaredMethods.firstOrNull {
                 it.name == "setRealTimeBlur" &&
                     it.parameterTypes.size == 4 &&
                     View::class.java.isAssignableFrom(it.parameterTypes[0]) &&
                     it.parameterTypes[1] == Int::class.javaPrimitiveType &&
                     it.parameterTypes[2] == Float::class.javaPrimitiveType &&
                     it.parameterTypes[3] == Int::class.javaPrimitiveType
-            } ?: run {
-                log(Log.WARN, TAG, "GLASS_UNAVAILABLE: native blur signature changed")
-                return
-            }
+            } ?: return
 
-            val calls = AtomicInteger(0)
-            hook(method).setId("liquidvolume.compact.glass").intercept { chain ->
-                val view = chain.args.getOrNull(0) as? View
-                if (view == null || !belongsToCompactPanel(view)) {
+            val logged = AtomicInteger(0)
+            hook(blurMethod).setId("liquidvolume.compact.realglass").intercept { chain ->
+                val blurView = chain.args[0] as? View
+                if (blurView == null || findAncestor(blurView, COMPACT_PANEL) == null) {
                     return@intercept chain.proceed()
                 }
 
+                // Preserve Samsung's blur radius and corner settings, adjust only tint.
                 val args = chain.args.toTypedArray()
-                val originalTint = args[1] as? Int ?: return@intercept chain.proceed()
-                // Samsung's previous tint was 0x80C9C9CC. Replace the gray tint
-                // BEFORE it creates/configures the real BackgroundBlurDrawable.
-                args[1] = GLASS_TINT
+                if (args[1] is Int) args[1] = GLASS_TINT
                 val result = chain.proceed(args)
 
-                // Some Samsung builds may override the color after the blur call.
-                // Update the SAME native drawable, without adding any view/foreground.
-                applyNativeTint(view)
-                view.post { applyNativeTint(view) }
-
-                if (calls.incrementAndGet() <= 5) {
-                    log(Log.INFO, TAG, "GLASS_TINT_APPLIED original=0x${originalTint.toUInt().toString(16)} new=0x${GLASS_TINT.toUInt().toString(16)}")
+                // Style after the stock onShow / layout, not an invisible placeholder.
+                blurView.post {
+                    try {
+                        val row = findAncestor(blurView, VOLUME_ROW) as? ViewGroup
+                        if (row != null) {
+                            val visibleBlur = activateExistingBlur(blurView)
+                            val (tracks, backgrounds) = styleActualSlider(row, blurView)
+                            if (logged.incrementAndGet() <= 6) {
+                                log(Log.INFO, TAG, "GLASS_RENDER row=${row.width}x${row.height} " +
+                                    "blurVisible=$visibleBlur seekbars=$tracks surfaces=$backgrounds")
+                            }
+                        }
+                    } catch (error: Throwable) {
+                        log(Log.WARN, TAG, "GLASS_RENDER_FAILED ${error.javaClass.simpleName}: ${error.message}")
+                    }
                 }
                 result
             }
-            log(Log.INFO, TAG, "GLASS_HOOK_INSTALLED: compact Samsung panel only")
-        } catch (e: Throwable) {
-            log(Log.ERROR, TAG, "GLASS_HOOK_FAILED: ${e.javaClass.simpleName}: ${e.message}")
+            log(Log.INFO, TAG, "GLASS_HOOK_INSTALLED: native compact row styling")
+        } catch (error: Throwable) {
+            log(Log.ERROR, TAG, "GLASS_HOOK_FAILED ${error.javaClass.simpleName}: ${error.message}")
         }
     }
 
-    private fun belongsToCompactPanel(view: View): Boolean {
+    private fun findAncestor(view: View, className: String): View? {
         var current: View? = view
-        var levels = 0
-        while (current != null && levels++ < 12) {
-            if (current.javaClass.name == COMPACT_PANEL) return true
-            current = current.parent as? View
+        repeat(12) {
+            if (current == null) return null
+            if (current?.javaClass?.name == className) return current
+            current = current?.parent as? View
         }
-        return false
+        return null
     }
 
-    private fun applyNativeTint(view: View) {
-        val native = view.background ?: return
-        if (native.javaClass.name != NATIVE_BLUR_DRAWABLE) return
-        try {
-            native.javaClass.getMethod("setColor", Int::class.javaPrimitiveType)
-                .invoke(native, GLASS_TINT)
-            // Drawable alpha is BLUR REGION alpha, not the tint's alpha.
-            native.alpha = 255
-            native.invalidateSelf()
-            view.invalidate()
-        } catch (e: Throwable) {
-            log(Log.WARN, TAG, "GLASS_NATIVE_COLOR_UNAVAILABLE: ${e.javaClass.simpleName}")
+    /** Only show Samsung's own blur ImageView if it is behind sibling controls. */
+    private fun activateExistingBlur(view: View): Boolean {
+        val parent = view.parent as? ViewGroup ?: return view.visibility == View.VISIBLE
+        val background = view.background ?: return false
+        val native = background.javaClass.name.contains("BackgroundBlurDrawable")
+        if (native && parent.indexOfChild(view) == 0 && view.visibility == View.INVISIBLE) {
+            view.visibility = View.VISIBLE
         }
+        return native && view.visibility == View.VISIBLE
+    }
+
+    /**
+     * The old releases styled the invisible blurView or the oversized panel.
+     * Here we modify only the visible, narrow track inside VolumeRowView.
+     */
+    private fun styleActualSlider(row: ViewGroup, blurView: View): Pair<Int, Int> {
+        val all = ArrayList<View>()
+        fun visit(view: View, depth: Int) {
+            if (depth > 9 || all.size >= 90) return
+            all.add(view)
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) visit(view.getChildAt(i), depth + 1)
+            }
+        }
+        visit(row, 0)
+
+        var seekbars = 0
+        var surfaces = 0
+        for (view in all) {
+            if (view === blurView || view.visibility != View.VISIBLE) continue
+            if (view is ProgressBar) {
+                val drawable = view.progressDrawable
+                if (drawable is LayerDrawable) {
+                    val track = drawable.findDrawableByLayerId(android.R.id.background)
+                    if (track != null) {
+                        track.mutate().setTint(GLASS_TINT)
+                        seekbars++
+                    }
+                } else {
+                    view.progressBackgroundTintList = ColorStateList.valueOf(GLASS_TINT)
+                    seekbars++
+                }
+                continue
+            }
+
+            // The compact face is ~118x591px; its row is ~223x712px.
+            // Never recolor the row itself, panel, window, or small icon views.
+            if (view is ImageView || view is TextView || view is ViewGroup &&
+                (view.width > blurView.width * 1.35f || view.height < blurView.height * 0.70f)
+            ) continue
+            if (view.width < blurView.width * 0.65f ||
+                view.width > blurView.width * 1.35f ||
+                view.height < blurView.height * 0.70f ||
+                view.height > blurView.height * 1.20f) continue
+
+            val background = view.background ?: continue
+            if (background is GradientDrawable) {
+                val shaped = background.mutate() as GradientDrawable
+                shaped.setColor(GLASS_TINT)
+                shaped.setStroke(2, 0xB0FFFFFF.toInt())
+                surfaces++
+            } else if (background is ColorDrawable) {
+                background.mutate().setTint(GLASS_TINT)
+                surfaces++
+            } else if (background is LayerDrawable) {
+                val track = background.findDrawableByLayerId(android.R.id.background)
+                if (track != null) {
+                    track.mutate().setTint(GLASS_TINT)
+                    surfaces++
+                }
+            }
+        }
+        return seekbars to surfaces
     }
 
     companion object {
         private const val TAG = "LiquidVolume"
         private const val SYSTEM_UI = "com.android.systemui"
         private const val COMPACT_PANEL = "com.android.systemui.volume.view.standard.VolumePanelView"
-        private const val NATIVE_BLUR_DRAWABLE =
-            "com.android.internal.graphics.drawable.BackgroundBlurDrawable"
-        private const val GLASS_TINT: Int = 0x58FFFFFF
+        private const val VOLUME_ROW = "com.android.systemui.volume.view.VolumeRowView"
+        private const val GLASS_TINT: Int = 0x70FFFFFF
     }
 }
