@@ -241,17 +241,22 @@ class LiquidVolumeEntry : XposedModule() {
                             .filterIsInstance<android.view.View>()
                             .firstOrNull { it.javaClass.name == "com.android.systemui.volume.view.standard.VolumePanelView" }
                         if (panel != null && view != null && view.width > 0 && view.height > 0) {
-                            val original = view.background
-                            if (original is android.graphics.drawable.GradientDrawable) {
-                                val glass = original.constantState?.newDrawable()?.mutate() as? android.graphics.drawable.GradientDrawable
-                                if (glass != null) {
-                                    glass.setColor(0x55FFFFFF)
-                                    glass.cornerRadius = view.width / 2f
-                                    view.background = glass
-                                    log(Log.INFO, TAG, "GLASS_APPLIED native blur retained; translucent white background on compact blur view")
+                            // Preserve Samsung's BackgroundBlurDrawable on the blur view.
+                            // Only tint the compact VolumePanelView's own background.
+                            if (panel.getTag(0x7e0a0001) != true) {
+                                val original = panel.background
+                                if (original is android.graphics.drawable.ColorDrawable) {
+                                    val glass = android.graphics.drawable.GradientDrawable().apply {
+                                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                        cornerRadius = panel.width.coerceAtLeast(1) / 2f
+                                        setColor(0x66FFFFFF)
+                                    }
+                                    panel.background = glass
+                                    panel.setTag(0x7e0a0001, true)
+                                    log(Log.INFO, TAG, "GLASS_APPLIED compact panel translucent white tint; Samsung blur preserved")
+                                } else {
+                                    log(Log.WARN, TAG, "GLASS_SKIPPED panel background ${original?.javaClass?.name}")
                                 }
-                            } else {
-                                log(Log.WARN, TAG, "GLASS_SKIPPED unsupported background ${original?.javaClass?.name}")
                             }
                         }
                     } catch (e: Throwable) {
