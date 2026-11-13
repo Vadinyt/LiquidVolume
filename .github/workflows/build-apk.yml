@@ -19,9 +19,18 @@ jobs:
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: '8.14.4'
+      - name: Check Maven repository connectivity
+        shell: bash
+        run: |
+          for url in \
+            'https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.0.21/kotlin-stdlib-2.0.21.pom' \
+            'https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.13.2/gradle-8.13.2.pom'; do
+            echo "Checking $url"
+            curl --location --head --max-time 20 --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' "$url" || true
+          done
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug --stacktrace
+        run: gradle --no-daemon --refresh-dependencies :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: LiquidVolume-debug-apk
