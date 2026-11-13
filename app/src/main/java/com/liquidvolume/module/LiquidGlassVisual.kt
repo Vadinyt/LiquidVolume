@@ -171,28 +171,119 @@ object LiquidGlassVisual {
  * This drawable intentionally excludes dots and glyphs, so Samsung controls
  * remain on top and receive their normal touch events.
  */
+/**
+ * Neutral glass capsule, no draw-over on native Samsung icons or text.
+ * Only the original narrow track's background uses this painter.
+ */
 class LiquidGlassShellDrawable : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var overallAlpha = 255
+    private var colorFilterValue: ColorFilter? = null
+
     override fun draw(canvas: Canvas) {
-        val r = RectF(bounds)
-        if (r.isEmpty) return
-        val radius = r.width() * 0.5f
-        brush.style = Paint.Style.FILL
-        brush.shader = LinearGradient(r.left, r.top, r.right, r.bottom,
-            intArrayOf(0x75FFFFFF, 0x32E7F3FF, 0x65FFFFFF), null,
-            Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(r, radius, radius, brush)
+        val rect = RectF(bounds)
+        if (rect.isEmpty) return
+        val radius = rect.width() / 2f
+        val saved = canvas.save()
+        val path = Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) }
+        canvas.clipPath(path)
+
+        // Layered pearl-glass material with softly changing translucency.
+        brush.reset()
+        brush.isAntiAlias = true
+        brush.alpha = overallAlpha
+        brush.colorFilter = colorFilterValue
+        brush.shader = LinearGradient(
+            rect.left, rect.top, rect.right, rect.bottom,
+            intArrayOf(0xA8FFFFFF.toInt(), 0x75F0F8FF, 0x4BDAEBFF, 0x8CFFFFFF.toInt()),
+            floatArrayOf(0f, 0.30f, 0.68f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(rect, radius, radius, brush)
+
+        brush.shader = RadialGradient(
+            rect.left + rect.width() * 0.14f,
+            rect.top + rect.height() * 0.30f,
+            max(rect.width(), rect.height() * 0.60f),
+            intArrayOf(0x4BFFFFFF, 0x12EAF8FF, 0x00FFFFFF),
+            floatArrayOf(0f, 0.44f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(rect, radius, radius, brush)
+        canvas.restoreToCount(saved)
         brush.shader = null
+    }
+
+    override fun setAlpha(alpha: Int) {
+        overallAlpha = alpha.coerceIn(0, 255)
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        colorFilterValue = colorFilter
+        invalidateSelf()
+    }
+
+    @Deprecated("Deprecated in Android framework")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+/**
+ * Optical edge highlights, drawn above the native seekbar but never across
+ * its center. This does not alter layout or consume any touch events.
+ */
+class LiquidGlassRimDrawable : Drawable() {
+    private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var overallAlpha = 255
+    private var colorFilterValue: ColorFilter? = null
+
+    override fun draw(canvas: Canvas) {
+        val rect = RectF(bounds)
+        if (rect.isEmpty) return
+        val radius = rect.width() * 0.5f
+        val border = max(1.4f, rect.width() * 0.012f)
+        brush.reset()
+        brush.isAntiAlias = true
+        brush.alpha = overallAlpha
+        brush.colorFilter = colorFilterValue
         brush.style = Paint.Style.STROKE
-        brush.strokeWidth = max(1f, r.width() / 65f)
-        brush.color = 0xBDFFFFFF.toInt()
-        val inset = brush.strokeWidth * 0.5f
-        canvas.drawRoundRect(RectF(r.left + inset, r.top + inset,
-            r.right - inset, r.bottom - inset), radius, radius, brush)
+        brush.strokeWidth = border
+        brush.shader = LinearGradient(
+            rect.left, rect.top, rect.right, rect.bottom,
+            intArrayOf(0xEFFFFFFF.toInt(), 0x9AF8FFFF.toInt(), 0x55CDE8FF, 0xD4FFFFFF.toInt()),
+            null,
+            Shader.TileMode.CLAMP
+        )
+        val inset = border * 0.5f
+        canvas.drawRoundRect(
+            RectF(rect.left + inset, rect.top + inset,
+                rect.right - inset, rect.bottom - inset),
+            radius, radius, brush
+        )
+
+        // Very thin optical reflection on the left edge of the capsule.
+        brush.shader = null
+        brush.color = 0xAAFFFFFF.toInt()
+        brush.strokeWidth = max(0.8f, rect.width() * 0.009f)
+        val leftInset = rect.width() * 0.075f
+        canvas.drawArc(
+            RectF(rect.left + leftInset, rect.top + leftInset,
+                rect.right - leftInset, rect.bottom - leftInset),
+            128f, 105f, false, brush
+        )
         brush.style = Paint.Style.FILL
     }
-    override fun setAlpha(alpha: Int) { invalidateSelf() }
-    override fun setColorFilter(colorFilter: ColorFilter?) { invalidateSelf() }
+
+    override fun setAlpha(alpha: Int) {
+        overallAlpha = alpha.coerceIn(0, 255)
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        colorFilterValue = colorFilter
+        invalidateSelf()
+    }
+
     @Deprecated("Deprecated in Android framework")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
