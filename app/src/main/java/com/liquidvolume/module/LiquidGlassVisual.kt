@@ -232,7 +232,7 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             invalidate()
         }
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var level = 0.38f
+    private var level = 0f
     private val density = resources.displayMetrics.density
     private val sliderRect = RectF()
     private val shell = LiquidGlassShellDrawable()
@@ -277,10 +277,10 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             brush.shader = null
         }
 
-        // Native One UI 9 compact blur area measured near 118×591 px on the S23+.
-        // Preview uses the corresponding approximately 42×210 dp proportions.
-        val pillW = min(42f * density, w * 0.22f)
-        val pillH = min(210f * density, h * 0.75f)
+        // Deliberately enlarged, elegant design preview as in the original 0.17.
+        // Samsung's real compact panel remains at its actual smaller native size.
+        val pillW = min(81f * density, w * 0.29f)
+        val pillH = min(345f * density, h * 0.79f)
         sliderRect.set(w * 0.69f - pillW * 0.5f,
             (h - pillH) * 0.5f,
             w * 0.69f + pillW * 0.5f, (h + pillH) * 0.5f)
@@ -306,7 +306,7 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             fillPaint.isAntiAlias = true
             fillPaint.shader = LinearGradient(
                 fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
-                intArrayOf(0xEAF9FFFF.toInt(), 0xC8F1FAFF.toInt(), 0xDCE8FAFF.toInt()),
+                intArrayOf(0xBAF7FCFF.toInt(), 0xA6EAF7FF.toInt(), 0xC4EDF8FF.toInt()),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawRoundRect(fillRect, fillRect.width() / 2f,
