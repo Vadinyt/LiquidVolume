@@ -50,7 +50,8 @@ class LiquidVolumeEntry : XposedModule() {
             hook(blurMethod).setId("liquidvolume.compact.liquidglass").intercept { chain ->
                 val image = chain.args[0] as? View
                 val compactPanel = image?.let { ancestor(it, COMPACT_PANEL) }
-                if (image == null || compactPanel == null || styleFailures.get() >= 3) {
+                if (image == null || image.id != BLUR_VIEW_ID ||
+                    compactPanel == null || styleFailures.get() >= 3) {
                     return@intercept chain.proceed()
                 }
 
