@@ -2,7 +2,7 @@
     <application
         android:allowBackup="false"
         android:label="Liquid Volume"
-        android:description="Liquid Glass volume panel for Samsung One UI"
+        android:description="@string/app_description"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
