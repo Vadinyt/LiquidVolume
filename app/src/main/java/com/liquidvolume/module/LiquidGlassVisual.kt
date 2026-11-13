@@ -106,7 +106,7 @@ class LiquidGlassShellDrawable : Drawable() {
         clipping.addRoundRect(rect, radius, radius, Path.Direction.CW)
         backgroundShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(0x88FFFFFF.toInt(), 0x55F0F8FF, 0x39DAEBFF, 0x73FFFFFF),
+            intArrayOf(0xA8FFFFFF.toInt(), 0x75F0F8FF, 0x4BDAEBFF, 0x8CFFFFFF.toInt()),
             floatArrayOf(0f, 0.30f, 0.68f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -114,7 +114,7 @@ class LiquidGlassShellDrawable : Drawable() {
             rect.left + rect.width() * 0.14f,
             rect.top + rect.height() * 0.30f,
             max(rect.width(), rect.height() * 0.60f),
-            intArrayOf(0x2AFFFFFF, 0x0CEAF8FF, 0x00FFFFFF),
+            intArrayOf(0x4BFFFFFF, 0x12EAF8FF, 0x00FFFFFF),
             floatArrayOf(0f, 0.44f, 1f),
             Shader.TileMode.CLAMP
         )
