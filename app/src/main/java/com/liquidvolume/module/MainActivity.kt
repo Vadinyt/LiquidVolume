@@ -13,11 +13,11 @@ class MainActivity : Activity() {
             setPadding(48, 56, 48, 48)
         }
         root.addView(TextView(this).apply {
-            text = "Liquid Volume · 0.2.0-dev"
+            text = "Liquid Volume " + BuildConfig.VERSION_NAME
             textSize = 24f
         })
         root.addView(TextView(this).apply {
-            text = "Phase 1: interface analysis\n\nTarget: Samsung SystemUI\nFramework: modern LibXposed API 102\n\nDiagnostic build only. Check LSPosed logs for LiquidVolume."
+            text = "Compact Samsung volume panel\n\nNative background blur with translucent white tint.\n\nScope: System UI (com.android.systemui)\nFramework: LibXposed API 102\n\nEnable the module in LSPosed and restart SystemUI or your phone to apply changes."
             textSize = 16f
             setPadding(0, 28, 0, 0)
         })
