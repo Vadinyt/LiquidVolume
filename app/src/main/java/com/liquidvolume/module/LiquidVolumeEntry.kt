@@ -2,281 +2,105 @@ package com.liquidvolume.module
 
 import android.app.Application
 import android.util.Log
+import android.view.View
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import java.util.concurrent.atomic.AtomicInteger
 
-/** Diagnostic-only API 102 module. Does not install hooks or alter audio. */
+/**
+ * One UI compact volume glass: edit only Samsung's native blur tint.
+ * No replacement views, audio hooks, dialog resizing or overlays.
+ */
 class LiquidVolumeEntry : XposedModule() {
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
         super.onModuleLoaded(param)
-        log(Log.INFO, TAG, "Loaded; runtime API=${getApiVersion()}, framework=${getFrameworkName()} ${getFrameworkVersion()}")
+        log(Log.INFO, TAG, "Loaded: API=${getApiVersion()}")
     }
 
     override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
         super.onPackageLoaded(param)
-        if (param.packageName != TARGET_PACKAGE) return
-        val process = Application.getProcessName()
-        if (process != TARGET_PACKAGE) {
-            log(Log.INFO, TAG, "Skipping secondary process: $process")
-            return
-        }
-        log(Log.INFO, TAG, "Main SystemUI process confirmed: $process")
-        val loader = param.defaultClassLoader
-        val candidates = listOf(
-            "com.android.systemui.volume.SamsungVolumeDialogImpl",
-            "com.android.systemui.volume.VolumePanelDialogDelegate",
-            "com.android.systemui.volume.VolumePanelImpl",
-            "com.android.systemui.volume.VolumeDialogControllerImpl",
-            "com.android.systemui.volume.panel.ui.viewmodel.VolumePanelViewModel",
-            "com.android.systemui.volume.dialog.ui.binder.VolumeDialogViewBinder",
-            "com.android.systemui.volume.dialog.sliders.ui.VolumeDialogSliderViewBinder",
-            "com.android.systemui.volume.dialog.ui.viewmodel.VolumeDialogViewModel",
-            "com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogSliderViewModel",
-            "com.samsung.systemui.splugins.volume.VolumePanelState",
-            "com.samsung.systemui.splugins.volume.VolumePanelAction"
-        )
-        val present = mutableListOf<String>()
-        val missing = mutableListOf<String>()
-        for (name in candidates) {
-            try {
-                Class.forName(name, false, loader)
-                present += name
-            } catch (_: Throwable) {
-                missing += name
-            }
-        }
-        log(Log.INFO, TAG, "SystemUI class scan: ${present.size}/${candidates.size} candidates present")
-        present.forEach { log(Log.INFO, TAG, "FOUND $it") }
-        inspectVolumeMethods(loader)
-        inspectVolumeFields(loader)
-        inspectWindowStructure(loader)
-        inspectNativeBlur(loader)
-        observeNativeBlur(loader)
-        missing.forEach { log(Log.WARN, TAG, "MISSING $it") }
-        log(Log.INFO, TAG, "Diagnostic-only build: no hooks installed; native audio path untouched")
-    }
-    /** Reflection-only inventory. No method invocation, hooks, or view changes. */
-    private fun inspectVolumeMethods(loader: ClassLoader) {
-        val targets = listOf(
-            "com.android.systemui.volume.SamsungVolumeDialogImpl",
-            "com.android.systemui.volume.VolumePanelDialogDelegate",
-            "com.android.systemui.volume.VolumePanelImpl",
-            "com.android.systemui.volume.dialog.ui.binder.VolumeDialogViewBinder",
-            "com.android.systemui.volume.dialog.sliders.ui.VolumeDialogSliderViewBinder"
-        )
-        for (name in targets) {
-            try {
-                val type = Class.forName(name, false, loader)
-                val matches = type.declaredMethods
-                    .filter { method ->
-                        val n = method.name.lowercase()
-                        listOf("show", "dismiss", "bind", "inflate", "create", "update", "init", "attach").any { n.contains(it) }
-                    }
-                    .sortedBy { it.name }
-                    .take(18)
-                log(Log.INFO, TAG, "METHOD_SCAN ${type.simpleName}: ${matches.size} selected methods")
-                for (method in matches) {
-                    try {
-                        val args = method.parameterTypes.joinToString(",") { it.simpleName }
-                        log(Log.INFO, TAG, "METHOD ${type.simpleName}.${method.name}($args):${method.returnType.simpleName}")
-                    } catch (e: Throwable) {
-                        log(Log.WARN, TAG, "METHOD_SIGNATURE_FAILED ${type.simpleName}: ${e.javaClass.simpleName}")
-                    }
-                }
-            } catch (e: Throwable) {
-                log(Log.WARN, TAG, "METHOD_SCAN_FAILED $name: ${e.javaClass.simpleName}")
-            }
-        }
-        log(Log.INFO, TAG, "Method inventory complete; no hooks installed")
-    }
+        if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
 
-    /** Identify view/dialog references without reading live instance state. */
-    private fun inspectVolumeFields(loader: ClassLoader) {
-        val targets = listOf(
-            "com.android.systemui.volume.SamsungVolumeDialogImpl",
-            "com.android.systemui.volume.VolumePanelDialogDelegate",
-            "com.android.systemui.volume.VolumePanelImpl",
-            "com.android.systemui.volume.dialog.ui.binder.VolumeDialogViewBinder"
-        )
-        for (name in targets) {
-            try {
-                val type = Class.forName(name, false, loader)
-                val fields = type.declaredFields
-                    .filter { field ->
-                        val n = field.name.lowercase()
-                        val t = field.type.name.lowercase()
-                        listOf("view", "dialog", "window", "panel", "slider", "volume", "blur", "background")
-                            .any { n.contains(it) || t.contains(it) }
-                    }
-                    .sortedBy { it.name }
-                    .take(24)
-                log(Log.INFO, TAG, "FIELD_SCAN ${type.simpleName}: ${fields.size} selected fields")
-                for (field in fields) {
-                    log(Log.INFO, TAG, "FIELD ${type.simpleName}.${field.name}:${field.type.name}")
-                }
-            } catch (e: Throwable) {
-                log(Log.WARN, TAG, "FIELD_SCAN_FAILED $name: ${e.javaClass.simpleName}")
-            }
-        }
-        log(Log.INFO, TAG, "Phase 0.4 inspection complete; no hooks installed")
-    }
-
-    /** Read-only inventory of the Samsung standard volume window and its view types. */
-    private fun inspectWindowStructure(loader: ClassLoader) {
-        val targets = listOf(
-            "com.android.systemui.volume.view.standard.VolumePanelWindow",
-            "com.android.systemui.volume.view.standard.VolumePanelView",
-            "com.android.systemui.volume.view.standard.VolumePanelRowView"
-        )
-        for (name in targets) {
-            try {
-                val type = Class.forName(name, false, loader)
-                log(Log.INFO, TAG, "WINDOW_CLASS_FOUND $name superclass=${type.superclass?.name}")
-                type.declaredConstructors.take(5).forEach {
-                    log(Log.INFO, TAG, "WINDOW_CONSTRUCTOR ${type.simpleName}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }})")
-                }
-                type.declaredFields.sortedBy { it.name }.take(35).forEach {
-                    log(Log.INFO, TAG, "WINDOW_FIELD ${type.simpleName}.${it.name}:${it.type.name}")
-                }
-                type.declaredMethods.filter {
-                    val n = it.name.lowercase()
-                    listOf("show", "dismiss", "create", "inflate", "view", "window", "background", "blur", "attach", "layout").any(n::contains)
-                }.sortedBy { it.name }.take(35).forEach {
-                    log(Log.INFO, TAG, "WINDOW_METHOD ${type.simpleName}.${it.name}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }}):${it.returnType.simpleName}")
-                }
-            } catch (e: Throwable) {
-                log(Log.WARN, TAG, "WINDOW_CLASS_MISSING $name: ${e.javaClass.simpleName}")
-            }
-        }
-        log(Log.INFO, TAG, "Window structure inventory complete; visual changes disabled")
-    }
-
-    /** Reflection-only native blur inventory; never invokes Samsung blur APIs. */
-    private fun inspectNativeBlur(loader: ClassLoader) {
-        val viewName = "com.android.systemui.volume.view.standard.VolumePanelView"
         try {
-            val panel = Class.forName(viewName, false, loader)
-            val blurFields = panel.declaredFields.filter {
-                it.name.contains("blur", ignoreCase = true) ||
-                    it.type.name.contains("Blur", ignoreCase = true)
-            }
-            for (field in blurFields) {
-                log(Log.INFO, TAG, "BLUR_FIELD ${field.name}:${field.type.name}")
-                val type = field.type
-                log(Log.INFO, TAG, "BLUR_TYPE ${type.name} superclass=${type.superclass?.name}")
-                type.declaredMethods.sortedBy { it.name }.take(40).forEach { method ->
-                    log(Log.INFO, TAG, "BLUR_METHOD ${type.simpleName}.${method.name}(${method.parameterTypes.joinToString(",") { it.simpleName }}):${method.returnType.simpleName}")
-                }
-                type.declaredFields.sortedBy { it.name }.take(25).forEach {
-                    log(Log.INFO, TAG, "BLUR_MEMBER ${type.simpleName}.${it.name}:${it.type.name}")
-                }
-            }
-            panel.declaredMethods.filter {
-                val n = it.name.lowercase()
-                n.contains("blur") || n.contains("background") || n.contains("draw") || n.contains("alpha")
-            }.sortedBy { it.name }.take(30).forEach {
-                log(Log.INFO, TAG, "PANEL_VISUAL_METHOD ${it.name}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }}):${it.returnType.simpleName}")
-            }
-        } catch (e: Throwable) {
-            log(Log.WARN, TAG, "BLUR_INSPECTION_FAILED ${e.javaClass.simpleName}: ${e.message}")
-        }
-        log(Log.INFO, TAG, "Native blur inspection complete; no hooks or UI modifications")
-    }
-
-    /** Observe Samsung's own blur arguments without changing the result or view. */
-    private fun observeNativeBlur(loader: ClassLoader) {
-        try {
-            val panel = Class.forName("com.android.systemui.volume.view.standard.VolumePanelView", false, loader)
-            val effectType = panel.declaredFields.firstOrNull { it.name == "blurEffect" }?.type
+            val panel = Class.forName(COMPACT_PANEL, false, param.defaultClassLoader)
+            val effect = panel.declaredFields.firstOrNull { it.name == "blurEffect" }?.type
                 ?: run {
-                    log(Log.WARN, TAG, "BLUR_HOOK_SKIPPED blurEffect field missing")
+                    log(Log.WARN, TAG, "GLASS_UNAVAILABLE: Samsung blurEffect field missing")
                     return
                 }
-            val method = effectType.declaredMethods.firstOrNull {
-                it.name == "setRealTimeBlur" && it.parameterTypes.size == 4 &&
-                    android.view.View::class.java.isAssignableFrom(it.parameterTypes[0]) &&
+            val method = effect.declaredMethods.firstOrNull {
+                it.name == "setRealTimeBlur" &&
+                    it.parameterTypes.size == 4 &&
+                    View::class.java.isAssignableFrom(it.parameterTypes[0]) &&
                     it.parameterTypes[1] == Int::class.javaPrimitiveType &&
                     it.parameterTypes[2] == Float::class.javaPrimitiveType &&
                     it.parameterTypes[3] == Int::class.javaPrimitiveType
             } ?: run {
-                log(Log.WARN, TAG, "BLUR_HOOK_SKIPPED signature mismatch")
+                log(Log.WARN, TAG, "GLASS_UNAVAILABLE: native blur signature changed")
                 return
             }
-            val count = java.util.concurrent.atomic.AtomicInteger(0)
-            hook(method).setId("liquidvolume.blur.observe").intercept { chain ->
-                val index = count.incrementAndGet()
-                if (index <= 20) {
-                    try {
-                        val args = chain.args
-                        log(Log.INFO, TAG, "BLUR_CALL #$index arg1=${args[1]} arg2=${args[2]} arg3=${args[3]} viewType=${args[0]?.javaClass?.name}")
-                        if (index <= 5) {
-                            val view = args[0] as? android.view.View
-                            if (view != null) {
-                                log(Log.INFO, TAG, "COMPACT_VIEW_CONTEXT ${view.context.javaClass.name} id=${view.id} visible=${view.visibility} attached=${view.isAttachedToWindow} size=${view.width}x${view.height} alpha=${view.alpha} elevation=${view.elevation}")
-                                log(Log.INFO, TAG, "COMPACT_VIEW_BACKGROUND ${view.background?.javaClass?.name} foreground=${(view as? android.widget.FrameLayout)?.foreground?.javaClass?.name}")
-                                var parent: android.view.ViewParent? = view.parent
-                                var depth = 0
-                                while (parent != null && depth < 9) {
-                                    val parentView = parent as? android.view.View
-                                    log(Log.INFO, TAG, "COMPACT_PARENT #$depth type=${parent.javaClass.name} id=${parentView?.id} size=${parentView?.width}x${parentView?.height} background=${parentView?.background?.javaClass?.name}")
-                                    parent = parent.parent
-                                    depth++
-                                }
-                                val root = view.rootView
-                                log(Log.INFO, TAG, "COMPACT_ROOT ${root.javaClass.name} size=${root.width}x${root.height} tokenPresent=${root.windowToken != null}")
-                            }
-                            Throwable().stackTrace.take(12).forEach {
-                                log(Log.INFO, TAG, "COMPACT_CALLER ${it.className}.${it.methodName}")
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        log(Log.WARN, TAG, "BLUR_CALL_LOG_FAILED ${e.javaClass.simpleName}")
-                    }
+
+            val calls = AtomicInteger(0)
+            hook(method).setId("liquidvolume.compact.glass").intercept { chain ->
+                val view = chain.args.getOrNull(0) as? View
+                if (view == null || !belongsToCompactPanel(view)) {
+                    return@intercept chain.proceed()
                 }
-                val result = chain.proceed()
-                if (index <= 20) {
-                    try {
-                        val view = chain.args[0] as? android.view.View
-                        val panel = generateSequence(view?.parent) { it.parent }
-                            .filterIsInstance<android.view.View>()
-                            .firstOrNull { it.javaClass.name == "com.android.systemui.volume.view.standard.VolumePanelView" }
-                        if (panel != null && view != null && view.width > 0 && view.height > 0) {
-                            // Style the actual compact blur surface, not its oversized parent.
-                            // Do not replace the Samsung drawable: it provides native blur.
-                            if (view.getTag(0x7e0a0001) != true) {
-                                val nativeBlur = view.background
-                                if (nativeBlur != null && nativeBlur.javaClass.name.contains("BackgroundBlurDrawable")) {
-                                    nativeBlur.mutate().alpha = 120
-                                    val sheen = android.graphics.drawable.GradientDrawable(
-                                        android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                                        intArrayOf(0x55FFFFFF, 0x16FFFFFF, 0x36FFFFFF)
-                                    ).apply {
-                                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                                        cornerRadius = view.width / 2f
-                                        setStroke(2, 0x88FFFFFF.toInt())
-                                    }
-                                    view.foreground = sheen
-                                    view.setTag(0x7e0a0001, true)
-                                    log(Log.INFO, TAG, "GLASS_APPLIED native blur alpha=120 with white glass sheen")
-                                } else {
-                                    log(Log.WARN, TAG, "GLASS_SKIPPED unexpected compact drawable ${nativeBlur?.javaClass?.name}")
-                                }
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        log(Log.WARN, TAG, "GLASS_FAILED ${e.javaClass.simpleName}: ${e.message}")
-                    }
+
+                val args = chain.args.toTypedArray()
+                val originalTint = args[1] as? Int ?: return@intercept chain.proceed()
+                // Samsung's previous tint was 0x80C9C9CC. Replace the gray tint
+                // BEFORE it creates/configures the real BackgroundBlurDrawable.
+                args[1] = GLASS_TINT
+                val result = chain.proceed(args)
+
+                // Some Samsung builds may override the color after the blur call.
+                // Update the SAME native drawable, without adding any view/foreground.
+                applyNativeTint(view)
+                view.post { applyNativeTint(view) }
+
+                if (calls.incrementAndGet() <= 5) {
+                    log(Log.INFO, TAG, "GLASS_TINT_APPLIED original=0x${originalTint.toUInt().toString(16)} new=0x${GLASS_TINT.toUInt().toString(16)}")
                 }
                 result
             }
-            log(Log.INFO, TAG, "GLASS_HOOK_INSTALLED compact panel styling enabled; native blur call preserved")
+            log(Log.INFO, TAG, "GLASS_HOOK_INSTALLED: compact Samsung panel only")
         } catch (e: Throwable) {
-            log(Log.WARN, TAG, "BLUR_HOOK_FAILED ${e.javaClass.simpleName}: ${e.message}")
+            log(Log.ERROR, TAG, "GLASS_HOOK_FAILED: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    private fun belongsToCompactPanel(view: View): Boolean {
+        var current: View? = view
+        var levels = 0
+        while (current != null && levels++ < 12) {
+            if (current.javaClass.name == COMPACT_PANEL) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
+    private fun applyNativeTint(view: View) {
+        val native = view.background ?: return
+        if (native.javaClass.name != NATIVE_BLUR_DRAWABLE) return
+        try {
+            native.javaClass.getMethod("setColor", Int::class.javaPrimitiveType)
+                .invoke(native, GLASS_TINT)
+            // Drawable alpha is BLUR REGION alpha, not the tint's alpha.
+            native.alpha = 255
+            native.invalidateSelf()
+            view.invalidate()
+        } catch (e: Throwable) {
+            log(Log.WARN, TAG, "GLASS_NATIVE_COLOR_UNAVAILABLE: ${e.javaClass.simpleName}")
         }
     }
 
     companion object {
         private const val TAG = "LiquidVolume"
-        private const val TARGET_PACKAGE = "com.android.systemui"
+        private const val SYSTEM_UI = "com.android.systemui"
+        private const val COMPACT_PANEL = "com.android.systemui.volume.view.standard.VolumePanelView"
+        private const val NATIVE_BLUR_DRAWABLE =
+            "com.android.internal.graphics.drawable.BackgroundBlurDrawable"
+        private const val GLASS_TINT: Int = 0x58FFFFFF
     }
 }
