@@ -232,7 +232,7 @@ class LiquidGlassShellDrawable : Drawable() {
  * Optical edge highlights, drawn above the native seekbar but never across
  * its center. This does not alter layout or consume any touch events.
  */
-class LiquidGlassRimDrawable : Drawable() {
+class LiquidGlassRimDrawable(private val progressFraction: (() -> Float)? = null) : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
     private var overallAlpha = 255
     private var colorFilterValue: ColorFilter? = null
@@ -271,6 +271,28 @@ class LiquidGlassRimDrawable : Drawable() {
                 rect.right - leftInset, rect.bottom - leftInset),
             128f, 105f, false, brush
         )
+        // Dynamic liquid meniscus: follows Samsung's actual progress without
+        // changing the seekbar drawable, touch handling, or volume value.
+        val fraction = try { progressFraction?.invoke()?.coerceIn(0f, 1f) ?: 0f }
+            catch (_: Throwable) { 0f }
+        if (fraction > 0.015f && fraction < 0.985f) {
+            val cap = radius
+            val y = (rect.bottom - cap) - (rect.height() - cap * 2f) * fraction
+            val lens = RectF(
+                rect.left + rect.width() * 0.09f,
+                y - max(1.2f, rect.width() * 0.018f),
+                rect.right - rect.width() * 0.09f,
+                y + max(2.2f, rect.width() * 0.045f)
+            )
+            brush.shader = null
+            brush.style = Paint.Style.FILL
+            brush.color = 0x42FFFFFF
+            canvas.drawOval(lens, brush)
+            brush.style = Paint.Style.STROKE
+            brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
+            brush.color = 0xC9FFFFFF.toInt()
+            canvas.drawArc(lens, 188f, 164f, false, brush)
+        }
         brush.style = Paint.Style.FILL
     }
 
