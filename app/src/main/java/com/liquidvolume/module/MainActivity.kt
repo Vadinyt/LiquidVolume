@@ -80,6 +80,31 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44f)
         ).apply { topMargin = dp(12f) })
 
+        val nativeSizeToggle = TextView(this).apply {
+            text = "Comparer avec la taille Samsung"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setTextColor(0xFFC8DCF6.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(15f).toFloat()
+                setColor(0xFF111C31.toInt())
+                setStroke(dp(1f), 0xFF3B5170.toInt())
+            }
+            setOnClickListener {
+                preview.useNativeDimensions = !preview.useNativeDimensions
+                text = if (preview.useNativeDimensions) {
+                    "Revenir au grand design iOS"
+                } else {
+                    "Comparer avec la taille Samsung"
+                }
+            }
+        }
+        root.addView(nativeSizeToggle, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(42f)
+        ).apply { topMargin = dp(8f) })
+
         root.addView(TextView(this).apply {
             text = "Liquid Glass  •  Aperçu agrandi"
             textSize = 17f
@@ -90,7 +115,8 @@ class MainActivity : Activity() {
         root.addView(TextView(this).apply {
             text = "Design iOS avec capsule large, verre translucide et reflets discrets. " +
                 "Glisse sur la capsule pour simuler le volume. " +
-                "Sur le système, Samsung conserve les dimensions et les commandes audio."
+                "Le grand design iOS reste l'aperçu par défaut. " +
+                "Tu peux comparer sa taille avec celle du curseur Samsung."
             textSize = 13f
             setTextColor(0xFFB4C2D5.toInt())
             setLineSpacing(dp(3f).toFloat(), 1f)
