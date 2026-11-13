@@ -241,22 +241,20 @@ class LiquidVolumeEntry : XposedModule() {
                             .filterIsInstance<android.view.View>()
                             .firstOrNull { it.javaClass.name == "com.android.systemui.volume.view.standard.VolumePanelView" }
                         if (panel != null && view != null && view.width > 0 && view.height > 0) {
-                            // Preserve Samsung's BackgroundBlurDrawable on the blur view.
-                            // Only tint the compact VolumePanelView's own background.
-                            if (panel.getTag(0x7e0a0001) != true) {
-                                val original = panel.background
-                                if (original is android.graphics.drawable.ColorDrawable) {
-                                    val glass = android.graphics.drawable.GradientDrawable().apply {
-                                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                                        cornerRadius = panel.width.coerceAtLeast(1) / 2f
-                                        setColor(0x66FFFFFF)
-                                    }
-                                    panel.background = glass
-                                    panel.setTag(0x7e0a0001, true)
-                                    log(Log.INFO, TAG, "GLASS_APPLIED compact panel translucent white tint; Samsung blur preserved")
-                                } else {
-                                    log(Log.WARN, TAG, "GLASS_SKIPPED panel background ${original?.javaClass?.name}")
+                            // The parent is larger than the compact slider: never tint it.
+                            // Keep Samsung's BackgroundBlurDrawable and audio controls intact.
+                            if (view.getTag(0x7e0a0001) != true) {
+                                val glass = android.graphics.drawable.GradientDrawable(
+                                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                                    intArrayOf(0x66FFFFFF, 0x22FFFFFF)
+                                ).apply {
+                                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                    cornerRadius = view.width / 2f
+                                    setStroke(1, 0x55FFFFFF)
                                 }
+                                view.foreground = glass
+                                view.setTag(0x7e0a0001, true)
+                                log(Log.INFO, TAG, "GLASS_APPLIED compact blur view foreground; no parent tint")
                             }
                         }
                     } catch (e: Throwable) {
