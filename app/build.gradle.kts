@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.21.0-visible-glass"
+        versionCode = 22
+        versionName = "0.22.0-native-glass"
     }
     signingConfigs {
         create("persistentDebug") {
@@ -35,3 +35,4 @@ android {
 dependencies {
     compileOnly("io.github.libxposed:api:102.0.0")
 }
+
