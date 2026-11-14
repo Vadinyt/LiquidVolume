@@ -19,8 +19,8 @@ Decoded XML and DEX establish:
   sets radius 256, background color, a color-curve preset and corner radius,
   sets the foreground alpha to 30, then calls View.semSetBlurInfo.
 - When VOLUME_PARTIAL_BLUR is false or reduce-transparency is enabled, that method
-  hides the view and clears SemBlurInfo. Checking for BackgroundBlurDrawable in
-  View.background cannot detect this backend.
+  hides the view and clears SemBlurInfo. A hidden view cannot be revived merely
+  by requiring a BackgroundBlurDrawable that has already been cleared.
 - The progress background in volume_seekbar_drawable_no_blur is already transparent
   apart from its outline. Merely recoloring it does not address the blur-image planes.
 - VolumeRowView.initialize assigns native track/progress drawables.
@@ -30,15 +30,23 @@ Decoded XML and DEX establish:
 These are code findings. They do not prove which branch or material was active
 in the screenshot; no complete 0.21 runtime composition trace was available.
 
+Framework cross-check: [Samsung View implementation](https://github.com/488315/samsung_framework/blob/main/framework/sources/android/view/View.java)
+shows that semSetBlurInfo stores a private SemBlurInfo field and creates/reuses
+BackgroundBlurDrawable as View.background. There is no semGetBlurInfo in that
+framework snapshot. This is supporting evidence from another framework snapshot,
+not the phone's framework.jar. Runtime checks remain required.
+
 ## Change
 
 Use Samsung's live mode 0 on the existing blur view, with neutral background,
 no whitening color-curve preset, and a bounded 48–120 px radius. Read the previous
-SemBlurInfo for restoration. Missing reflection methods fail before removing
-native material. Retaining SemBlurInfo is logged as composition applied, not as
-proof of rendered GPU blur.
+SemBlurInfo field by its exact type for restoration. Missing reflection members fail before removing
+native material. Require both retained SemBlurInfo and the generated
+BackgroundBlurDrawable. Detach the old background before applying neutral blur
+to avoid reusing its whitening curve, then KEEP the newly generated background.
+The log is evidence of composition setup, not proof of rendered GPU blur.
 
-Remove the native blur background and foreground material. Keep a non-null,
+Rebuild the native blur background with neutral parameters and remove its foreground material. Keep a non-null,
 transparent foreground because Samsung dereferences it on its next blur call.
 Hide only the native progress background via its alpha; preserve the entire
 progress hierarchy, including warning colors and level animation.

@@ -38,11 +38,12 @@ internal object CompactGlassStyler {
         var appliedBlurInfo: Any,
         val shell: LiquidGlassShellDrawable = LiquidGlassShellDrawable(),
         val rim: LiquidGlassRimDrawable = LiquidGlassRimDrawable(),
-        val clearBackground: Drawable = ColorDrawable(Color.TRANSPARENT),
         // Samsung unconditionally calls getForeground().setAlpha(30). Never null it.
         val clearForeground: Drawable = ColorDrawable(Color.TRANSPARENT)
     ) {
         var detachListener: View.OnAttachStateChangeListener? = null
+        var appliedBlurBackground: Drawable? = null
+        var blurTouched = false
         var width = 0
         var height = 0
     }
@@ -136,10 +137,18 @@ internal object CompactGlassStyler {
                 applied.width = blur.width
                 applied.height = blur.height
             }
-            // Apply the live backend BEFORE removing any opaque native material.
+            // Samsung turns SemBlurInfo into the View's BackgroundBlurDrawable.
+            // Detach the old material FIRST to avoid retaining its color curve;
+            // keep the newly generated blur drawable as the actual background.
+            applied.blurTouched = true
+            setBackgroundPreservingPadding(blur, null)
             backend.set(blur, applied.appliedBlurInfo)
-            check(backend.current(blur) != null) { "Samsung did not retain SemBlurInfo" }
-            setBackgroundPreservingPadding(blur, applied.clearBackground)
+            applied.appliedBlurBackground = blur.background
+            check(backend.current(blur) === applied.appliedBlurInfo &&
+                blur.background?.javaClass?.name ==
+                    "com.android.internal.graphics.drawable.BackgroundBlurDrawable") {
+                "Samsung did not create the live blur background"
+            }
             blur.foreground = applied.clearForeground
             blur.visibility = View.VISIBLE
             // Keep the existing child and every Samsung cast/callback valid.
@@ -190,10 +199,11 @@ internal object CompactGlassStyler {
         restore { track.overlay.remove(state.rim) }
         restore { if (track.background === state.shell) setBackgroundPreservingPadding(track, state.originalTrackBackground) }
         restore { if (state.inner.alpha == 0) state.inner.alpha = state.originalInnerAlpha }
-        restore { if (state.blur.background === state.clearBackground) setBackgroundPreservingPadding(state.blur, state.originalBlurBackground) }
         restore { if (state.blur.foreground === state.clearForeground) state.blur.foreground = state.originalBlurForeground }
         restore {
-            if (backend.current(state.blur) === state.appliedBlurInfo) {
+            if (state.blurTouched && (backend.current(state.blur) === state.appliedBlurInfo ||
+                state.blur.background === state.appliedBlurBackground || state.blur.background == null)) {
+                setBackgroundPreservingPadding(state.blur, state.originalBlurBackground)
                 backend.set(state.blur, state.originalBlurInfo)
                 if (state.blur.visibility == View.VISIBLE) state.blur.visibility = state.originalVisibility
             }

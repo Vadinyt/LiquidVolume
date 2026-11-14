@@ -12,9 +12,13 @@ internal class SamsungGlassBlur {
     private val corner = builderClass.getMethod("setBackgroundCornerRadius", Float::class.javaPrimitiveType)
     private val build = builderClass.getMethod("build")
     private val setter = View::class.java.getMethod("semSetBlurInfo", infoClass)
-    private val getter = View::class.java.getMethod("semGetBlurInfo")
+    // Samsung View stores this privately; older framework builds expose no getter.
+    // Match the verified type rather than relying on a guessed method/field name.
+    private val infoField = View::class.java.declaredFields.single {
+        it.type == infoClass && !java.lang.reflect.Modifier.isStatic(it.modifiers)
+    }.apply { isAccessible = true }
 
-    fun current(view: View): Any? = getter.invoke(view)
+    fun current(view: View): Any? = infoField.get(view)
 
     fun create(view: View): Any {
         // Mode 0 samples the live backdrop. No screenshot and no color-curve
