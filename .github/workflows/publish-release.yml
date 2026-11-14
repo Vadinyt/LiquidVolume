@@ -1,0 +1,33 @@
+name: Publish validated APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [RELEASE.md]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the validated 0.29 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/$GH_REPO/actions/runs/43543496109 --jq '.head_sha + " " + .conclusion' > validated-run.txt
+          test "$(cat validated-run.txt)" = '3a38461d8a1771fb442496af271d14c9eeafaab7 success'
+          gh run download 43543496109 --name LiquidVolume-debug-apk --dir release-apk
+          mapfile -t apks < <(find release-apk -type f -name '*.apk')
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" LiquidVolume-0.29.0.apk
+          sha256sum LiquidVolume-0.29.0.apk > LiquidVolume-0.29.0.apk.sha256
+          if gh release view v0.29.0 >/dev/null 2>&1; then
+            echo 'Release already exists; leaving it unchanged.'
+            exit 0
+          fi
+          gh release create v0.29.0 LiquidVolume-0.29.0.apk LiquidVolume-0.29.0.apk.sha256 --target 3a38461d8a1771fb442496af271d14c9eeafaab7 --title 'LiquidVolume 0.29.0' --notes-file RELEASE.md
