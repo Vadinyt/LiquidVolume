@@ -38,7 +38,7 @@ object LiquidGlassVisual {
     fun drawControls(canvas: Canvas, rect: RectF, muted: Boolean, density: Float) {
         paint.reset()
         paint.isAntiAlias = true
-        paint.color = 0xD829313B.toInt()
+        paint.color = 0xE8FFFFFF.toInt()
         val y = rect.top + rect.width() * 0.52f
         val radius = max(1.4f * density, rect.width() * 0.033f)
         for (offset in floatArrayOf(-0.23f, 0f, 0.23f)) {
@@ -106,7 +106,7 @@ class LiquidGlassShellDrawable : Drawable() {
         clipping.addRoundRect(rect, radius, radius, Path.Direction.CW)
         backgroundShader = LinearGradient(
             rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(0x94FFFFFF.toInt(), 0x62F3FBFF, 0x45D8EBFF, 0x7EFFFFFF),
+            intArrayOf(0x25FFFFFF, 0x18000000, 0x12000000, 0x30FFFFFF),
             floatArrayOf(0f, 0.30f, 0.68f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -114,7 +114,7 @@ class LiquidGlassShellDrawable : Drawable() {
             rect.left + rect.width() * 0.14f,
             rect.top + rect.height() * 0.30f,
             max(rect.width(), rect.height() * 0.60f),
-            intArrayOf(0x36FFFFFF, 0x10EAF8FF, 0x00FFFFFF),
+            intArrayOf(0x19FFFFFF, 0x08FFFFFF, 0x00FFFFFF),
             floatArrayOf(0f, 0.44f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -182,12 +182,11 @@ class LiquidGlassRimDrawable : Drawable() {
         topArc.set(rect.left + inset, rect.top + inset,
             rect.right - inset, rect.top + rect.width() - inset)
         rimShader = LinearGradient(
-            rect.left, rect.top, rect.right, rect.bottom,
+            rect.left, rect.top, rect.left, rect.bottom,
             intArrayOf(
-                0xDEFFFFFF.toInt(), 0x8CEFFBFF.toInt(),
-                0x4BBEE5FF, 0xB0FFFFFF.toInt()
+                0xB8FFFFFF.toInt(), 0x60000000, 0x50000000, 0xD0FFFFFF.toInt()
             ),
-            null, Shader.TileMode.CLAMP
+            floatArrayOf(0f, 0.17f, 0.80f, 1f), Shader.TileMode.CLAMP
         )
     }
 
@@ -205,7 +204,7 @@ class LiquidGlassRimDrawable : Drawable() {
 
         // Short specular highlight confined to the top semicircle.
         brush.shader = null
-        brush.color = 0x91FFFFFF.toInt()
+        brush.color = 0x48FFFFFF
         brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
         canvas.drawArc(topArc, 210f, 115f, false, brush)
         brush.style = Paint.Style.FILL
@@ -299,13 +298,10 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         // Deliberately enlarged, elegant design preview as in the original 0.17.
         // Samsung's real compact panel remains at its actual smaller native size.
         val pillW = min(
-            (if (useNativeDimensions) 42f else 81f) * density,
-            w * (if (useNativeDimensions) 0.22f else 0.29f)
+            (if (useNativeDimensions) 68f else 100f) * density,
+            w * (if (useNativeDimensions) 0.25f else 0.34f)
         )
-        val pillH = min(
-            (if (useNativeDimensions) 210f else 345f) * density,
-            h * (if (useNativeDimensions) 0.75f else 0.79f)
-        )
+        val pillH = min(pillW * 3.1f, h * 0.79f)
         sliderRect.set(w * 0.69f - pillW * 0.5f,
             (h - pillH) * 0.5f,
             w * 0.69f + pillW * 0.5f, (h + pillH) * 0.5f)
@@ -388,3 +384,4 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         return true
     }
 }
+

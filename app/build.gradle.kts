@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.23.0-translucent-fill"
+        versionCode = 24
+        versionName = "0.24.0-smoked-capsule"
     }
     signingConfigs {
         create("persistentDebug") {

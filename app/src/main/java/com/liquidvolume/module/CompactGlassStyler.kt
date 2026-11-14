@@ -47,6 +47,7 @@ internal object CompactGlassStyler {
         var detachListener: View.OnAttachStateChangeListener? = null
         var appliedBlurBackground: Drawable? = null
         var blurTouched = false
+        var geometry: CompactGlassGeometry? = null
         var width = 0
         var height = 0
     }
@@ -171,6 +172,10 @@ internal object CompactGlassStyler {
                 }
                 applied.detachListener = listener
                 track.addOnAttachStateChangeListener(listener)
+                applied.geometry = CompactGlassGeometry(track, blur, seek, row, panel) {
+                    schedule(blur)
+                }
+                applied.geometry?.apply()
             }
             seek.invalidate()
             if (reports++ < 6) Log.i(TAG,
@@ -212,6 +217,7 @@ internal object CompactGlassStyler {
         installed.remove(track)
         state.detachListener?.let { track.removeOnAttachStateChangeListener(it) }
         restore { track.overlay.remove(state.rim) }
+        restore { state.geometry?.restore() }
         restore {
             if (abs(state.seek.alpha - state.nativeSeekAlpha * FILL_OPACITY) < 0.001f)
                 state.seek.alpha = state.nativeSeekAlpha
