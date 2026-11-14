@@ -107,6 +107,15 @@ internal object CompactGlassStyler {
             // ViewOverlay does not receive touch events.
             track.overlay.add(opticalLayer)
             installed[track] = state
+            // The volume panel is temporary. Remove the overlay and restore
+            // the exact Samsung drawables when SystemUI detaches this row.
+            track.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) = Unit
+                override fun onViewDetachedFromWindow(v: View) {
+                    rollback(track, state)
+                    track.removeOnAttachStateChangeListener(this)
+                }
+            })
             track.invalidate()
             seekBar.invalidate()
 
