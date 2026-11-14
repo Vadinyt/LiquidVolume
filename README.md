@@ -66,6 +66,10 @@ Include the module version, device, exact One UI/Android build, reproduction ste
 
 Module LSPosed qui donne un aspect verre au panneau de volume compact Samsung, tout en conservant les commandes natives. Installe l'APK depuis **Releases**, active le module pour **System UI**, puis redémarre SystemUI ou le téléphone. Le module n’est pas exclusif au Galaxy S23+ : d’autres téléphones sous One UI 9 peuvent fonctionner si leurs composants SystemUI sont compatibles, mais ils ne sont pas encore vérifiés. Seule la configuration indiquée ci-dessus a été testée ; One UI 9 ne garantit pas à lui seul la compatibilité. Le Design Studio est une simulation visuelle.
 
+### Licence
+
+LiquidVolume est un logiciel libre sous licence GNU GPL version 3 uniquement (`GPL-3.0-only`). Tu peux utiliser, modifier et partager le module. Si tu distribues un APK modifié, tu dois aussi permettre aux destinataires d’obtenir le code source correspondant sous la même licence. [Lire le texte intégral de la licence](LICENSE).
+
 ---
 
 Independent project by [Vadinyt](https://github.com/Vadinyt). Not affiliated with Samsung or Apple. 
