@@ -7,151 +7,165 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
+import java.util.WeakHashMap
 
 /**
- * Liquid Glass on Samsung's real compact VolumeSeekBar.
+ * Targets ONLY the existing compact Samsung volume row. Earlier builds placed
+ * the glass behind an opaque Samsung VolumeSeekBar, making it invisible.
  *
- * volume_row_view.xml:
- * - VolumeRowView (0x7e0a1050)
- * - native blur ImageView (0x7e0a1030)
- * - slider container (0x7e0a1052)
- * - VolumeSeekBar (0x7e0a1051)
- *
- * Crucial discovery from the supplied SystemUI.apk:
- * volume_seekbar_drawable_no_blur.xml is a LayerDrawable containing both an
- * opaque android.R.id.background and a separate native android.R.id.progress.
- * Styling only the slider container did not affect that opaque inner layer.
- *
- * We replace ONLY the inner background-layer drawable. We do not replace
- * progressDrawable itself, the SecRoundedCornerSeekBarDrawable fill, view
- * hierarchy, Samsung foreground, animations, or volume callbacks.
+ * This version places a translucent optical layer in track.overlay ABOVE the
+ * native seekbar. It is not a new panel or an input-handling overlay: the real
+ * Samsung slider, icons, gestures, progress and audio callbacks remain intact.
  */
 internal object CompactGlassStyler {
-    private const val ROW_ID = 0x7e0a1050
+    private const val TAG = "LiquidVolume"
     private const val BLUR_ID = 0x7e0a1030
     private const val TRACK_ID = 0x7e0a1052
-    private const val SLIDER_ID = 0x7e0a1051
-    private const val STATE_TAG = 0x7f0a7e10
-    private const val TAG = "LiquidVolume"
-    private const val COMPACT_PANEL =
+    private const val SEEK_ID = 0x7e0a1051
+    private const val PANEL_CLASS =
         "com.android.systemui.volume.view.standard.VolumePanelView"
     private const val ROW_CLASS = "com.android.systemui.volume.view.VolumeRowView"
-    private const val SEEK_CLASS = "com.android.systemui.volume.view.VolumeSeekBar"
 
-    private data class State(
+    private val installed = WeakHashMap<ViewGroup, StyleState>()
+
+    private class StyleState(
         val originalTrackBackground: Drawable?,
-        val progressLayers: LayerDrawable,
-        val originalInnerBackground: Drawable,
-        val transparentInnerBackground: Drawable,
         val shell: LiquidGlassShellDrawable,
-        val rim: LiquidGlassRimDrawable
+        val opticalOverlay: LiquidGlassOverlayDrawable,
+        val layers: LayerDrawable?,
+        val originalInnerBackground: Drawable?,
+        val transparentInnerBackground: Drawable?
     )
 
-    fun apply(compactPanel: View, blurView: View): Boolean {
-        if (compactPanel.javaClass.name != COMPACT_PANEL || blurView.id != BLUR_ID) return false
+    fun apply(panel: View, blurView: View): Boolean {
+        if (panel.javaClass.name != PANEL_CLASS) return false
+        if (blurView.id != BLUR_ID) return false
+
         val row = ancestor(blurView, ROW_CLASS) as? ViewGroup ?: return false
-        if (row.id != ROW_ID || !row.isAttachedToWindow) return false
+        val seekBar = (row.findViewById<View>(SEEK_ID) as? ProgressBar)
+            ?: findVolumeSeekBar(row) ?: return false
 
-        val track = row.findViewById<ViewGroup>(TRACK_ID) ?: return false
-        val slider = row.findViewById<ProgressBar>(SLIDER_ID) ?: return false
-        if (slider.javaClass.name != SEEK_CLASS || slider.parent !== track ||
-            track.width <= 0 || track.height <= 0) return false
+        // The track is the narrow parent of the existing Samsung seekbar.
+        // Use the XML ID when present, otherwise its real parent.
+        val xmlTrack = row.findViewById<View>(TRACK_ID) as? ViewGroup
+        val directParent = seekBar.parent as? ViewGroup ?: return false
+        val track = if (xmlTrack != null && containsView(xmlTrack, seekBar)) {
+            xmlTrack
+        } else {
+            directParent
+        }
 
-        val layers = slider.progressDrawable as? LayerDrawable ?: return false
-        val backgroundLayer = layers.findDrawableByLayerId(android.R.id.background) ?: return false
-        val fillLayer = layers.findDrawableByLayerId(android.R.id.progress) ?: return false
-        if (layers.numberOfLayers < 2 || fillLayer === backgroundLayer) return false
+        if (!track.isAttachedToWindow || track.width <= 20 || track.height <= 20) {
+            return false
+        }
+        // Prevent the oversized double capsule from v0.10.
+        if (blurView.width > 0 && track.width > blurView.width * 1.6f) {
+            Log.w(TAG, "GLASS_SKIP_OVERSIZED_TRACK ${track.width} vs blur ${blurView.width}")
+            return false
+        }
 
-        val existing = track.getTag(STATE_TAG) as? State
-        if (existing != null && existing.progressLayers === layers) {
-            // Vendor code can restore a drawable while displaying the panel.
-            // Reapply only on the normal onShow callback, never on every frame.
-            if (track.background !== existing.shell) track.background = existing.shell
-            if (layers.findDrawableByLayerId(android.R.id.background) !==
-                existing.transparentInnerBackground) {
-                layers.setDrawableByLayerId(
-                    android.R.id.background, existing.transparentInnerBackground
-                )
-            }
-            if (existing.rim.bounds.width() != track.width ||
-                existing.rim.bounds.height() != track.height) {
-                existing.rim.setBounds(0, 0, track.width, track.height)
+        val previous = installed[track]
+        if (previous != null) {
+            previous.opticalOverlay.setBounds(0, 0, track.width, track.height)
+            if (track.background !== previous.shell) {
+                track.background = previous.shell
             }
             return true
         }
 
-        if (existing != null) {
-            // Samsung re-created the seekbar drawable. Undo only our old view
-            // decoration and reattach to the current native layers.
-            rollback(track, existing)
-        }
+        val nativeLayers = seekBar.progressDrawable as? LayerDrawable
+        val originalInner = nativeLayers
+            ?.findDrawableByLayerId(android.R.id.background)
+        val clone = (originalInner as? GradientDrawable)?.constantState
+            ?.newDrawable()?.mutate() as? GradientDrawable
+        clone?.setColor(0x05FFFFFF)
 
-        val shell = LiquidGlassShellDrawable()
-        val rim = LiquidGlassRimDrawable().apply {
+        val glassBody = LiquidGlassShellDrawable()
+        val opticalLayer = LiquidGlassOverlayDrawable().apply {
             setBounds(0, 0, track.width, track.height)
         }
-        // Clone Samsung's original <shape> instead of inventing a replacement
-        // with different intrinsic dimensions. Preserve native size, radius and
-        // layer geometry, changing only the gray fill and outline.
-        val originalShape = backgroundLayer as? GradientDrawable ?: return false
-        val transparentBase =
-            originalShape.constantState?.newDrawable()?.mutate() as? GradientDrawable
-                ?: return false
-        transparentBase.setColor(0x05FFFFFF)
-        transparentBase.setStroke(0, 0x00FFFFFF)
-        val state = State(
+        val state = StyleState(
             originalTrackBackground = track.background,
-            progressLayers = layers,
-            originalInnerBackground = backgroundLayer,
-            transparentInnerBackground = transparentBase,
-            shell = shell,
-            rim = rim
+            shell = glassBody,
+            opticalOverlay = opticalLayer,
+            layers = nativeLayers,
+            originalInnerBackground = originalInner,
+            transparentInnerBackground = clone
         )
 
         try {
-            if (!layers.setDrawableByLayerId(android.R.id.background, transparentBase)) {
-                Log.w(TAG, "GLASS_SKIPPED: native seekbar layer is immutable")
-                return false
-            }
-            // Native progress / opacity fill stays untouched. The translucent
-            // shell is now visible THROUGH the cleared internal background.
-            track.background = shell
-            // Draw a subtle outline ABOVE the native fill without replacing
-            // Samsung's foreground (and without consuming any touch events).
-            track.overlay.add(rim)
-            track.setTag(STATE_TAG, state)
-            track.invalidate()
-            slider.invalidate()
+            // Optional: lighten Samsung's own gray fill when the native drawable
+            // supports safe replacement of this ONE layer. Never replace the
+            // ProgressBar's progressDrawable or the progress layer.
+            val nativeCleared =
+                nativeLayers != null && clone != null &&
+                nativeLayers.setDrawableByLayerId(android.R.id.background, clone)
 
-            Log.i(TAG, "GLASS_VISIBLE_APPLIED: cleared native gray seekbar layer")
+            track.background = glassBody
+
+            // Crucial: this draws ON TOP of the opaque slider, unlike v0.19/0.20
+            // which only changed backgrounds hidden by Samsung.
+            // ViewOverlay does not receive touch events.
+            track.overlay.add(opticalLayer)
+            installed[track] = state
+            track.invalidate()
+            seekBar.invalidate()
+
+            Log.i(TAG, "GLASS_FRONT_LAYER_APPLIED track=${track.width}x${track.height} nativeCleared=$nativeCleared")
             return true
         } catch (error: Throwable) {
             rollback(track, state)
-            Log.w(TAG, "GLASS_STYLE_ROLLED_BACK ${error.javaClass.simpleName}: ${error.message}")
+            Log.e(TAG, "GLASS_FRONT_LAYER_FAILED ${error.javaClass.simpleName}: ${error.message}")
             return false
         }
     }
 
-    private fun rollback(track: ViewGroup, state: State) {
+    private fun rollback(track: ViewGroup, state: StyleState) {
         try {
-            if (state.progressLayers.findDrawableByLayerId(android.R.id.background) ===
-                state.transparentInnerBackground) {
-                state.progressLayers.setDrawableByLayerId(
+            track.overlay.remove(state.opticalOverlay)
+            if (track.background === state.shell) {
+                track.background = state.originalTrackBackground
+            }
+            if (state.layers != null && state.originalInnerBackground != null &&
+                state.transparentInnerBackground != null &&
+                state.layers.findDrawableByLayerId(android.R.id.background) ===
+                    state.transparentInnerBackground) {
+                state.layers.setDrawableByLayerId(
                     android.R.id.background, state.originalInnerBackground
                 )
             }
-            track.overlay.remove(state.rim)
-            track.background = state.originalTrackBackground
-            track.setTag(STATE_TAG, null)
+            installed.remove(track)
         } catch (error: Throwable) {
-            Log.w(TAG, "GLASS_RESTORE_FAILED ${error.javaClass.simpleName}")
+            Log.w(TAG, "GLASS_ROLLBACK_FAILED ${error.javaClass.simpleName}")
         }
     }
 
-    private fun ancestor(view: View, expected: String): View? {
+    private fun findVolumeSeekBar(root: ViewGroup): ProgressBar? {
+        for (i in 0 until root.childCount) {
+            val child = root.getChildAt(i)
+            if (child is ProgressBar &&
+                child.javaClass.name.contains("VolumeSeekBar")) return child
+            if (child is ViewGroup) {
+                val found = findVolumeSeekBar(child)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    private fun containsView(root: ViewGroup, child: View): Boolean {
+        var parent: View? = child
+        repeat(8) {
+            if (parent === root) return true
+            parent = parent?.parent as? View
+        }
+        return false
+    }
+
+    private fun ancestor(view: View, name: String): View? {
         var current: View? = view
         repeat(12) {
-            if (current?.javaClass?.name == expected) return current
+            if (current?.javaClass?.name == name) return current
             current = current?.parent as? View
         }
         return null
