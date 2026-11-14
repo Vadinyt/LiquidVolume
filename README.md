@@ -26,7 +26,9 @@ The included **Design Studio** provides an interactive visual preview, dark/colo
 | Root used during development | KernelSU |
 | Module scope | System UI (`com.android.systemui`) |
 
-**Device-specific project.** Other models and firmware builds are unverified. Android minimum SDK 31 is a build setting, not a promise of One UI compatibility. Samsung's internal classes and resources can change between updates.
+**Not exclusive to the Galaxy S23+.** LiquidVolume was developed and tested on the configuration above. Other One UI 9 phones may work if they use compatible Samsung SystemUI volume-panel classes, resource IDs and layouts, but they are currently **unverified**. One UI 9 alone does not guarantee compatibility across models or firmware builds.
+
+LSPosed with modern API 102 support is required. Android minimum SDK 31 is a build setting, not a promise of compatibility with older One UI versions. Samsung's internal classes and resources can change between updates.
 
 ## Installation
 
@@ -62,7 +64,7 @@ Include the module version, device, exact One UI/Android build, reproduction ste
 
 ## Français
 
-Module LSPosed qui donne un aspect verre au panneau de volume compact Samsung, tout en conservant les commandes natives. Installe l'APK depuis **Releases**, active le module pour **System UI**, puis redémarre SystemUI ou le téléphone. Seule la configuration indiquée ci-dessus a été testée. Le Design Studio est une simulation visuelle.
+Module LSPosed qui donne un aspect verre au panneau de volume compact Samsung, tout en conservant les commandes natives. Installe l'APK depuis **Releases**, active le module pour **System UI**, puis redémarre SystemUI ou le téléphone. Le module n’est pas exclusif au Galaxy S23+ : d’autres téléphones sous One UI 9 peuvent fonctionner si leurs composants SystemUI sont compatibles, mais ils ne sont pas encore vérifiés. Seule la configuration indiquée ci-dessus a été testée ; One UI 9 ne garantit pas à lui seul la compatibilité. Le Design Studio est une simulation visuelle.
 
 ---
 
