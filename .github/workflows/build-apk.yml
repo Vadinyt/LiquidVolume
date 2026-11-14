@@ -2,7 +2,7 @@ name: Build Liquid Volume APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'design/ios-liquid-glass']
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
         env:
           LV_KEYSTORE_PASSWORD: LiquidVolumeDev2026
           LV_KEY_PASSWORD: LiquidVolumeDev2026
-        run: gradle --no-daemon :app:assembleDebug --stacktrace
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: LiquidVolume-debug-apk

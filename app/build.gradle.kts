@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 16
-        versionName = "0.16.0-rollback"
+        versionCode = 29
+        versionName = "0.29.0-aligned-fill"
     }
     signingConfigs {
         create("persistentDebug") {
@@ -34,4 +34,7 @@ android {
 }
 dependencies {
     compileOnly("io.github.libxposed:api:102.0.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
 }
+
