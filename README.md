@@ -68,4 +68,8 @@ Module LSPosed qui donne un aspect verre au panneau de volume compact Samsung, t
 
 ---
 
-Independent project by [Vadinyt](https://github.com/Vadinyt). Not affiliated with Samsung or Apple. No open-source licence has been selected yet; public visibility alone does not grant a general redistribution licence.
+Independent project by [Vadinyt](https://github.com/Vadinyt). Not affiliated with Samsung or Apple. 
+
+## License
+
+LiquidVolume is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full terms.
