@@ -3,6 +3,7 @@ package com.liquidvolume.module
 import android.app.Application
 import android.util.Log
 import android.view.View
+import android.widget.SeekBar
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -17,6 +18,40 @@ class LiquidVolumeEntry : XposedModule() {
         super.onPackageLoaded(param)
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
         val loader = param.defaultClassLoader
+        try {
+            val seekClass = Class.forName("com.android.systemui.volume.view.VolumeSeekBar", false, loader)
+            val track = seekClass.getDeclaredMethod("trackTouchEvent", Float::class.javaPrimitiveType)
+            val touchedX = seekClass.getDeclaredField("touchedX").apply { isAccessible = true }
+            val currentProgress = seekClass.getDeclaredField("currentProgress").apply { isAccessible = true }
+            val stream = seekClass.getDeclaredField("stream").apply { isAccessible = true }
+            var reportedFailure = false
+            hook(track).setId("liquidvolume.compact.precision").intercept { chain ->
+                val nativeDelta = chain.args[0] as Float
+                var delta = nativeDelta
+                try {
+                    val seek = chain.thisObject as? SeekBar
+                    if (seek != null && CompactGlassStyler.ownsSeek(seek) &&
+                        stream.getInt(seek) == 3 && kotlin.math.abs(seek.rotation - 270f) < 1f) {
+                        delta = PrecisionDrag.remap(nativeDelta,
+                            touchedX.getFloat(seek) - seek.paddingLeft,
+                            (seek.width - seek.paddingLeft - seek.paddingRight).toFloat(),
+                            currentProgress.getInt(seek), seek.min, seek.max)
+                    }
+                } catch (error: Throwable) {
+                    if (!reportedFailure) {
+                        reportedFailure = true
+                        log(Log.ERROR, TAG, "GLASS_PRECISION_FAILED_NATIVE_FALLBACK", error)
+                    }
+                }
+                // Exactly one original call, with native tracking and listeners.
+                // Never catch/retry an exception raised by Samsung's own method.
+                if (delta == nativeDelta) chain.proceed()
+                else chain.proceed(arrayOf<Any>(delta))
+            }
+            log(Log.INFO, TAG, "GLASS_PRECISION_HOOK_INSTALLED")
+        } catch (error: Throwable) {
+            log(Log.ERROR, TAG, "GLASS_PRECISION_HOOK_FAILED", error)
+        }
         try {
             val icon = Class.forName("com.android.systemui.volume.view.icon.VolumeIcon", false, loader)
             val update = icon.declaredMethods.single { it.name == "updateIconState" && it.parameterTypes.size == 2 }

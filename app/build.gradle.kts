@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.26.0-speaker-glass"
+        versionCode = 27
+        versionName = "0.27.0-precise-slider"
     }
     signingConfigs {
         create("persistentDebug") {
@@ -34,5 +34,6 @@ android {
 }
 dependencies {
     compileOnly("io.github.libxposed:api:102.0.0")
+    testImplementation("junit:junit:4.13.2")
 }
 

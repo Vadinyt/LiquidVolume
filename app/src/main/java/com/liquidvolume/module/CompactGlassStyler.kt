@@ -57,7 +57,7 @@ internal object CompactGlassStyler {
         var height = 0
     }
 
-    /** One queued update per row. No draw hooks, touch hooks or frame loop. */
+    /** One queued visual update per row. No draw hooks or frame loop. */
     fun schedule(source: View) {
         val row = ancestor(source, ROW_CLASS) ?: return
         if (failures >= 3 || pending.put(row, true) != null) return
@@ -204,6 +204,11 @@ internal object CompactGlassStyler {
         val state = installed.values.firstOrNull { it.seek === view } ?: return
         state.nativeSeekAlpha = view.alpha
         view.alpha = state.nativeSeekAlpha * FILL_OPACITY
+    }
+
+    fun ownsSeek(view: View): Boolean {
+        val track = view.parent as? ViewGroup ?: return false
+        return view.isAttachedToWindow && installed[track]?.seek === view
     }
 
     private fun setBackgroundPreservingPadding(view: View, drawable: Drawable?) {
