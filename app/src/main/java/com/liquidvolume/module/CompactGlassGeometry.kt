@@ -2,6 +2,7 @@ package com.liquidvolume.module
 
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
@@ -39,7 +40,10 @@ internal class CompactGlassGeometry(
     private val nativePaddingBottom = seek.paddingBottom
     private val originalCorner = fill?.cornerRadius
     private val originalCorners = fill?.cornerRadii?.clone()
+    private val originalProgress = seek.progressDrawable
+    private val originalProgressBounds = Rect(originalProgress.bounds)
     private var listener: View.OnLayoutChangeListener? = null
+    private var restored = false
 
     fun apply() {
         val height = track.height
@@ -54,7 +58,15 @@ internal class CompactGlassGeometry(
                 track.removeOnLayoutChangeListener(this)
                 listener = null
                 // Post after the whole sibling layout, so blur and track agree.
-                track.post { if (track.isAttachedToWindow) onLaidOut() }
+                track.post {
+                    if (track.isAttachedToWindow && !restored) {
+                        // The square SeekBar keeps the same measured size. Merely
+                        // changing maxHeight does not trigger onSizeChanged, so
+                        // its old narrow drawable bounds otherwise survive.
+                        NativeTrackBounds.apply(seek, track.width)
+                        onLaidOut()
+                    }
+                }
             }
         }
         listener = ready
@@ -109,12 +121,14 @@ internal class CompactGlassGeometry(
     }
 
     fun restore() {
+        restored = true
         listener?.let { track.removeOnLayoutChangeListener(it) }
         listener = null
         seek.minHeight = nativeMinHeight
         seek.maxHeight = nativeMaxHeight
         seek.setPadding(seek.paddingLeft, nativePaddingTop, seek.paddingRight, nativePaddingBottom)
         sizes.forEach { resize(it.view, it.width, it.height) }
+        if (seek.progressDrawable === originalProgress) originalProgress.bounds = originalProgressBounds
         if (originalCorners != null) fill?.cornerRadii = originalCorners
         else originalCorner?.let { fill?.cornerRadius = it }
         tints.forEach {
@@ -126,5 +140,18 @@ internal class CompactGlassGeometry(
         iconSkin = null
         decorations.forEach { if (it.view.background === it.clear) it.view.background = it.original }
         decorations.clear()
+    }
+}
+
+/** Refresh the existing track once after layout, never during draw or touch. */
+internal object NativeTrackBounds {
+    fun apply(seek: ProgressBar, thickness: Int) {
+        val drawable = seek.progressDrawable ?: return
+        val width = seek.width - seek.paddingLeft - seek.paddingRight
+        val height = seek.height - seek.paddingTop - seek.paddingBottom
+        if (thickness <= 0 || width <= thickness || height < thickness) return
+        val top = (height - thickness) / 2
+        drawable.setBounds(0, top, width, top + thickness)
+        seek.invalidate()
     }
 }
