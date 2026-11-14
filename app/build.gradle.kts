@@ -9,8 +9,8 @@ android {
         applicationId = "com.liquidvolume.module"
         minSdk = 31
         targetSdk = 35
-        versionCode = 27
-        versionName = "0.27.0-precise-slider"
+        versionCode = 28
+        versionName = "0.28.0-low-level-fill"
     }
     signingConfigs {
         create("persistentDebug") {
@@ -35,5 +35,6 @@ android {
 dependencies {
     compileOnly("io.github.libxposed:api:102.0.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
 }
 

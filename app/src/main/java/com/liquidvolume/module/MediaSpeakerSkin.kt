@@ -69,7 +69,7 @@ internal object MediaSpeakerSkin {
         }
     }
 
-    private class SpeakerDrawable : Drawable() {
+    class SpeakerDrawable : Drawable() {
         var muted = false
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val body = Path().apply {

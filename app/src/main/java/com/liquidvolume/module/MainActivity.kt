@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ScrollView
+import android.widget.Button
 
 /**
  * Design studio, not an alternate system-volume UI.
@@ -55,6 +56,43 @@ class MainActivity : Activity() {
             dp(475f)
         ))
 
+        val levelLabel = TextView(this).apply {
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFE8F2FF.toInt())
+            setPadding(0, dp(12f), 0, dp(4f))
+        }
+        root.addView(levelLabel)
+        preview.onLevelChanged = { step ->
+            val percent = kotlin.math.round(step / 1.5f).toInt()
+            levelLabel.text = if (step == 0) "Aperçu : muet" else "Aperçu : $percent %  ·  $step / 150"
+        }
+        preview.setPreviewStep(savedInstanceState?.getInt("previewStep") ?: 0)
+        studioPreview = preview
+        fun buttonRow(labels: List<String>, action: (Int) -> Unit) {
+            root.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                labels.forEachIndexed { index, label ->
+                    addView(Button(this@MainActivity).apply {
+                        text = label
+                        textSize = 12f
+                        isAllCaps = false
+                        setTextColor(0xFFE8F2FF.toInt())
+                        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF202D47.toInt())
+                        setPadding(0, 0, 0, 0)
+                        setOnClickListener { action(index) }
+                    }, LinearLayout.LayoutParams(0, dp(48f), 1f).apply { setMargins(dp(2f), 0, dp(2f), 0) })
+                }
+            })
+        }
+        buttonRow(listOf("− 1 cran", "+ 1 cran")) {
+            preview.setPreviewStep(preview.previewStep + if (it == 0) -1 else 1)
+        }
+        val presets = listOf(0, 1, 5, 33, 100)
+        buttonRow(presets.map { "$it %" }) {
+            preview.setPreviewStep(kotlin.math.round(presets[it] * 1.5f).toInt())
+        }
+
         val backgroundToggle = TextView(this).apply {
             text = "Voir sur fond noir"
             textSize = 13f
@@ -81,7 +119,7 @@ class MainActivity : Activity() {
         ).apply { topMargin = dp(12f) })
 
         val nativeSizeToggle = TextView(this).apply {
-            text = "Comparer avec la taille Samsung"
+            text = "Voir au format compact"
             textSize = 13f
             gravity = Gravity.CENTER
             isClickable = true
@@ -95,9 +133,9 @@ class MainActivity : Activity() {
             setOnClickListener {
                 preview.useNativeDimensions = !preview.useNativeDimensions
                 text = if (preview.useNativeDimensions) {
-                    "Revenir au grand design iOS"
+                    "Revenir à l’aperçu agrandi"
                 } else {
-                    "Comparer avec la taille Samsung"
+                    "Voir au format compact"
                 }
             }
         }
@@ -113,10 +151,10 @@ class MainActivity : Activity() {
             setPadding(0, dp(19f), 0, dp(6f))
         })
         root.addView(TextView(this).apply {
-            text = "Design iOS avec capsule large, verre translucide et reflets discrets. " +
-                "Glisse sur la capsule pour simuler le volume. " +
-                "Le grand design iOS reste l'aperçu par défaut. " +
-                "Tu peux comparer sa taille avec celle du curseur Samsung."
+            text = "Glisse sur la capsule ou utilise les crans pour comparer les faibles niveaux. " +
+                "Le haut-parleur et le remplissage correspondent au style du panneau actuel. " +
+                "Cet aperçu simule le volume sans modifier le son du téléphone. " +
+                "Le flou réel reste celui du panneau système."
             textSize = 13f
             setTextColor(0xFFB4C2D5.toInt())
             setLineSpacing(dp(3f).toFloat(), 1f)
@@ -129,4 +167,11 @@ class MainActivity : Activity() {
         }
         setContentView(scroll)
     }
+
+    private var studioPreview: LiquidGlassPreviewView? = null
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("previewStep", studioPreview?.previewStep ?: 0)
+        super.onSaveInstanceState(outState)
+    }
 }
+

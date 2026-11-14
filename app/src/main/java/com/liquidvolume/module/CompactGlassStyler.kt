@@ -35,6 +35,7 @@ internal object CompactGlassStyler {
         val seek: ProgressBar,
         var nativeSeekAlpha: Float,
         val inner: Drawable,
+        val progress: Drawable,
         val originalTrackBackground: Drawable?,
         val originalBlurBackground: Drawable?,
         val originalBlurForeground: Drawable?,
@@ -57,7 +58,7 @@ internal object CompactGlassStyler {
         var height = 0
     }
 
-    /** One queued visual update per row. No draw hooks or frame loop. */
+    /** One queued layout/style update per row; never reapplied during drawing. */
     fun schedule(source: View) {
         val row = ancestor(source, ROW_CLASS) ?: return
         if (failures >= 3 || pending.put(row, true) != null) return
@@ -128,13 +129,13 @@ internal object CompactGlassStyler {
         if (progress.javaClass.name != "com.android.systemui.volume.view.SecRoundedCornerSeekBarDrawable") return
 
         var state = installed[track]
-        if (state != null && (state.inner !== inner || state.seek !== seek)) {
+        if (state != null && (state.inner !== inner || state.progress !== progress || state.seek !== seek)) {
             rollback(track, state)
             state = null
         }
         val isNew = state == null
         val currentBlur = backend.current(blur)
-        val applied = state ?: StyleState(blur, seek, seek.alpha, inner, track.background, blur.background,
+        val applied = state ?: StyleState(blur, seek, seek.alpha, inner, progress, track.background, blur.background,
             blur.foreground, blur.visibility, inner.alpha, currentBlur, backend.create(blur))
         try {
             if (!isNew && currentBlur !== applied.appliedBlurInfo) {
@@ -187,6 +188,7 @@ internal object CompactGlassStyler {
                 }
                 applied.geometry?.apply()
             }
+            LowVolumeFill.register(progress)
             seek.invalidate()
             if (reports++ < 6) Log.i(TAG,
                 "GLASS_COMPOSITION_APPLIED backend=SemBlurInfo mode=0 " +
@@ -204,11 +206,6 @@ internal object CompactGlassStyler {
         val state = installed.values.firstOrNull { it.seek === view } ?: return
         state.nativeSeekAlpha = view.alpha
         view.alpha = state.nativeSeekAlpha * FILL_OPACITY
-    }
-
-    fun ownsSeek(view: View): Boolean {
-        val track = view.parent as? ViewGroup ?: return false
-        return view.isAttachedToWindow && installed[track]?.seek === view
     }
 
     private fun setBackgroundPreservingPadding(view: View, drawable: Drawable?) {
@@ -230,6 +227,7 @@ internal object CompactGlassStyler {
             }
         }
         installed.remove(track)
+        LowVolumeFill.remove(state.progress)
         state.detachListener?.let { track.removeOnAttachStateChangeListener(it) }
         restore { track.overlay.remove(state.rim) }
         restore { state.geometry?.restore() }

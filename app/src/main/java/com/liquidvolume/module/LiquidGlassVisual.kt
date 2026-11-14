@@ -30,47 +30,21 @@ import kotlin.math.min
  */
 object LiquidGlassVisual {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val speaker = MediaSpeakerSkin.SpeakerDrawable()
 
-    /**
-     * Illustration only: production preserves Samsung's native icons.
-     * The background and rim are the same drawables in both modes.
-     */
     fun drawControls(canvas: Canvas, rect: RectF, muted: Boolean, density: Float) {
-        paint.reset()
-        paint.isAntiAlias = true
-        paint.color = 0xE8FFFFFF.toInt()
-        val y = rect.top + rect.width() * 0.52f
-        val radius = max(1.4f * density, rect.width() * 0.033f)
-        for (offset in floatArrayOf(-0.23f, 0f, 0.23f)) {
+        paint.color = 0xA8FFFFFF.toInt()
+        val y = rect.top + rect.width() * 0.27f
+        val radius = max(1.4f * density, rect.width() * 0.025f)
+        for (offset in floatArrayOf(-0.10f, 0f, 0.10f)) {
             canvas.drawCircle(rect.centerX() + offset * rect.width(), y, radius, paint)
         }
-
-        // Simplified music-note glyph, closer to Samsung's media stream icon.
-        val cx = rect.centerX()
-        val cy = rect.bottom - rect.width() * 0.52f
-        val size = rect.width() * 0.21f
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(
-            RectF(cx - size * 0.62f, cy + size * 0.25f,
-                cx + size * 0.18f, cy + size * 0.73f), paint
-        )
-        paint.style = Paint.Style.STROKE
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.strokeWidth = max(1.7f * density, rect.width() * 0.045f)
-        val note = Path().apply {
-            moveTo(cx + size * 0.12f, cy + size * 0.48f)
-            lineTo(cx + size * 0.12f, cy - size * 0.82f)
-            cubicTo(cx + size * 0.8f, cy - size * 0.72f,
-                cx + size * 0.95f, cy - size * 0.21f,
-                cx + size * 0.75f, cy + size * 0.18f)
-        }
-        canvas.drawPath(note, paint)
-        if (muted) {
-            canvas.drawLine(cx - size, cy - size,
-                cx + size, cy + size, paint)
-        }
-        paint.style = Paint.Style.FILL
+        val size = rect.width() * 0.38f
+        val cy = rect.bottom - rect.width() * 0.32f
+        speaker.muted = muted
+        speaker.setBounds((rect.centerX() - size / 2).toInt(), (cy - size / 2).toInt(),
+            (rect.centerX() + size / 2).toInt(), (cy + size / 2).toInt())
+        speaker.draw(canvas)
     }
 }
 
@@ -232,7 +206,18 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             invalidate()
         }
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var level = 0f
+    var onLevelChanged: ((Int) -> Unit)? = null
+    var previewStep: Int = 0
+        private set
+    private val level get() = previewStep / 150f
+    fun setPreviewStep(step: Int) {
+        previewStep = step.coerceIn(0, 150)
+        contentDescription = "Aperçu du volume : ${kotlin.math.round(level * 100).toInt()} pour cent"
+        onLevelChanged?.invoke(previewStep)
+        invalidate()
+    }
+    private val lowFill = LowVolumeFillRenderer()
+    private val horizontalBounds = Rect()
     private val density = resources.displayMetrics.density
     private val sliderRect = RectF()
     private val shell = LiquidGlassShellDrawable()
@@ -308,37 +293,32 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         shell.draw(canvas)
 
         if (level > 0f) {
-            val cap = sliderRect.width() * 0.5f
-            val top = sliderRect.top + cap * 0.9f
-            val bottom = sliderRect.bottom - cap * 0.82f
-            val fillTop = bottom - (bottom - top) * level
-            val inset = 3f * density
-            fillRect.set(
-                sliderRect.left + inset, fillTop,
-                sliderRect.right - inset, sliderRect.bottom - inset
-            )
-            fillPaint.reset()
-            fillPaint.isAntiAlias = true
-            if (fillTop != lastFillTop || fillRect.bottom != lastFillBottom) {
-                fillShader = LinearGradient(
-                    fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
-                    intArrayOf(0xBAF7FCFF.toInt(), 0xA6EAF7FF.toInt(), 0xC4EDF8FF.toInt()),
-                    null, Shader.TileMode.CLAMP
-                )
-                lastFillTop = fillTop
-                lastFillBottom = fillRect.bottom
+            val saved = canvas.save()
+            canvas.translate(sliderRect.left, sliderRect.bottom)
+            canvas.rotate(-90f)
+            horizontalBounds.set(0, 0, sliderRect.height().toInt(), sliderRect.width().toInt())
+            val alphaLayer = canvas.saveLayerAlpha(0f, 0f, sliderRect.height(), sliderRect.width(), 158)
+            if (!lowFill.draw(canvas, horizontalBounds, (level * 10000).toInt(),
+                0x66FFFFFF, Color.WHITE, Color.TRANSPARENT)) {
+                fillRect.set(0f, 0f, horizontalBounds.width() * level, horizontalBounds.height().toFloat())
+                if (fillRect.right != lastFillTop || fillRect.bottom != lastFillBottom) {
+                    fillShader = LinearGradient(0f, 0f, fillRect.right, 0f,
+                        0x66FFFFFF, Color.WHITE, Shader.TileMode.CLAMP)
+                    lastFillTop = fillRect.right
+                    lastFillBottom = fillRect.bottom
+                }
+                fillPaint.shader = fillShader
+                canvas.drawRoundRect(fillRect, fillRect.height() / 2f, fillRect.height() / 2f, fillPaint)
             }
-            fillPaint.shader = fillShader
-            canvas.drawRoundRect(fillRect, fillRect.width() / 2f,
-                fillRect.width() / 2f, fillPaint)
-            fillPaint.shader = null
+            canvas.restoreToCount(alphaLayer)
+            canvas.restoreToCount(saved)
         }
         rim.setBounds(
             sliderRect.left.toInt(), sliderRect.top.toInt(),
             sliderRect.right.toInt(), sliderRect.bottom.toInt()
         )
         rim.draw(canvas)
-        LiquidGlassVisual.drawControls(canvas, sliderRect, level <= 0.01f, density)
+        LiquidGlassVisual.drawControls(canvas, sliderRect, previewStep == 0, density)
 
         brush.reset()
         brush.isAntiAlias = true
@@ -359,13 +339,17 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 if (!sliderRect.contains(event.x, event.y) && event.actionMasked == MotionEvent.ACTION_DOWN)
                     return false
-                val top = sliderRect.top + sliderRect.width() * 0.74f
-                val bottom = sliderRect.bottom - sliderRect.width() * 0.68f
-                level = ((bottom - event.y) / max(1f, bottom - top)).coerceIn(0f, 1f)
-                invalidate()
+                parent?.requestDisallowInterceptTouchEvent(true)
+                val fraction = ((sliderRect.bottom - event.y) / max(1f, sliderRect.height())).coerceIn(0f, 1f)
+                setPreviewStep(kotlin.math.round(fraction * 150).toInt())
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
             MotionEvent.ACTION_UP -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
                 performClick()
                 return true
             }

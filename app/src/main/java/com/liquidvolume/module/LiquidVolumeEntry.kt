@@ -3,7 +3,8 @@ package com.liquidvolume.module
 import android.app.Application
 import android.util.Log
 import android.view.View
-import android.widget.SeekBar
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -19,38 +20,36 @@ class LiquidVolumeEntry : XposedModule() {
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
         val loader = param.defaultClassLoader
         try {
-            val seekClass = Class.forName("com.android.systemui.volume.view.VolumeSeekBar", false, loader)
-            val track = seekClass.getDeclaredMethod("trackTouchEvent", Float::class.javaPrimitiveType)
-            val touchedX = seekClass.getDeclaredField("touchedX").apply { isAccessible = true }
-            val currentProgress = seekClass.getDeclaredField("currentProgress").apply { isAccessible = true }
-            val stream = seekClass.getDeclaredField("stream").apply { isAccessible = true }
+            val drawableClass = Class.forName("com.android.systemui.volume.view.SecRoundedCornerSeekBarDrawable", false, loader)
+            val draw = drawableClass.getDeclaredMethod("draw", Canvas::class.java)
+            val level = drawableClass.getDeclaredField("level").apply { isAccessible = true }
+            val start = drawableClass.getDeclaredField("startColor").apply { isAccessible = true }
+            val end = drawableClass.getDeclaredField("endColor").apply { isAccessible = true }
+            val button = drawableClass.getDeclaredField("buttonColor").apply { isAccessible = true }
             var reportedFailure = false
-            hook(track).setId("liquidvolume.compact.precision").intercept { chain ->
-                val nativeDelta = chain.args[0] as Float
-                var delta = nativeDelta
+            hook(draw).setId("liquidvolume.compact.lowfill").intercept { chain ->
+                var handled = false
+                val drawable = chain.thisObject as? Drawable
                 try {
-                    val seek = chain.thisObject as? SeekBar
-                    if (seek != null && CompactGlassStyler.ownsSeek(seek) &&
-                        stream.getInt(seek) == 3 && kotlin.math.abs(seek.rotation - 270f) < 1f) {
-                        delta = PrecisionDrag.remap(nativeDelta,
-                            touchedX.getFloat(seek) - seek.paddingLeft,
-                            (seek.width - seek.paddingLeft - seek.paddingRight).toFloat(),
-                            currentProgress.getInt(seek), seek.min, seek.max)
+                    if (drawable != null) {
+                        val renderer = LowVolumeFill.renderer(drawable)
+                        if (renderer != null) handled = renderer.draw(chain.args[0] as Canvas,
+                            drawable.bounds, level.getInt(drawable), start.getInt(drawable),
+                            end.getInt(drawable), button.getInt(drawable))
                     }
                 } catch (error: Throwable) {
+                    drawable?.let { LowVolumeFill.remove(it) }
                     if (!reportedFailure) {
                         reportedFailure = true
-                        log(Log.ERROR, TAG, "GLASS_PRECISION_FAILED_NATIVE_FALLBACK", error)
+                        log(Log.ERROR, TAG, "GLASS_LOWFILL_FAILED_NATIVE_FALLBACK", error)
                     }
                 }
-                // Exactly one original call, with native tracking and listeners.
-                // Never catch/retry an exception raised by Samsung's own method.
-                if (delta == nativeDelta) chain.proceed()
-                else chain.proceed(arrayOf<Any>(delta))
+                // Above the low-level branch, Samsung draws exactly as before.
+                if (handled) null else chain.proceed()
             }
-            log(Log.INFO, TAG, "GLASS_PRECISION_HOOK_INSTALLED")
+            log(Log.INFO, TAG, "GLASS_LOWFILL_HOOK_INSTALLED")
         } catch (error: Throwable) {
-            log(Log.ERROR, TAG, "GLASS_PRECISION_HOOK_FAILED", error)
+            log(Log.ERROR, TAG, "GLASS_LOWFILL_HOOK_FAILED", error)
         }
         try {
             val icon = Class.forName("com.android.systemui.volume.view.icon.VolumeIcon", false, loader)
