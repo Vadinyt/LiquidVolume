@@ -50,8 +50,8 @@ class LiquidVolumeEntry : XposedModule() {
             hook(blurMethod).setId("liquidvolume.compact.liquidglass").intercept { chain ->
                 val image = chain.args[0] as? View
                 val compactPanel = image?.let { ancestor(it, COMPACT_PANEL) }
-                if (image == null || image.id != BLUR_VIEW_ID ||
-                    compactPanel == null || styleFailures.get() >= 3) {
+                if (image == null || compactPanel == null ||
+                    styleFailures.get() >= 3) {
                     return@intercept chain.proceed()
                 }
 
@@ -93,7 +93,8 @@ class LiquidVolumeEntry : XposedModule() {
     }
 
     private fun revealSamsungBlurIfValid(view: View) {
-        if (view.id != BLUR_VIEW_ID) return
+        // Samsung resource IDs differ between builds. Trust the native
+        // BackgroundBlurDrawable and the exact compact-panel ancestry instead.
         if (view.visibility != View.INVISIBLE) return
         if (view.background?.javaClass?.name != NATIVE_BLUR_DRAWABLE) return
         val parent = view.parent as? android.view.ViewGroup ?: return
