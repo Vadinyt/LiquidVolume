@@ -39,7 +39,6 @@ internal object CompactGlassStyler {
 
     fun apply(panel: View, blurView: View): Boolean {
         if (panel.javaClass.name != PANEL_CLASS) return false
-        if (blurView.id != BLUR_ID) return false
 
         val row = ancestor(blurView, ROW_CLASS) as? ViewGroup ?: return false
         val seekBar = (row.findViewById<View>(SEEK_ID) as? ProgressBar)
