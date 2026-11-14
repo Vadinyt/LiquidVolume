@@ -18,6 +18,23 @@ class LiquidVolumeEntry : XposedModule() {
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
         val loader = param.defaultClassLoader
         try {
+            val icon = Class.forName("com.android.systemui.volume.view.icon.VolumeIcon", false, loader)
+            val update = icon.declaredMethods.single { it.name == "updateIconState" && it.parameterTypes.size == 2 }
+            hook(update).setId("liquidvolume.media.speaker").intercept { chain ->
+                val result = chain.proceed()
+                try {
+                    val host = chain.thisObject as? View
+                    val row = chain.args[0]
+                    if (host != null && row != null) MediaSpeakerSkin.nativeUpdated(host, row)
+                } catch (error: Throwable) {
+                    log(Log.ERROR, TAG, "GLASS_SPEAKER_FAILED", error)
+                }
+                result
+            }
+        } catch (error: Throwable) {
+            log(Log.ERROR, TAG, "GLASS_SPEAKER_HOOK_FAILED", error)
+        }
+        try {
             val seekClass = Class.forName("com.android.systemui.volume.view.VolumeSeekBar", false, loader)
             val enabled = seekClass.getDeclaredMethod("setEnabled", Boolean::class.javaPrimitiveType)
             hook(enabled).setId("liquidvolume.compact.fill.enabled").intercept { chain ->

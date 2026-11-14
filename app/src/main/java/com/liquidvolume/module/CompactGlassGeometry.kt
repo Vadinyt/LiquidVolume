@@ -1,6 +1,8 @@
 package com.liquidvolume.module
 
 import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
@@ -22,6 +24,9 @@ internal class CompactGlassGeometry(
     private data class Size(val view: View, val width: Int, val height: Int)
     private data class Tint(val view: ImageView, val tint: ColorStateList?)
     private val sizes = listOf(track, blur, seek).map { Size(it, it.layoutParams.width, it.layoutParams.height) }
+    private data class Decoration(val view: View, val original: Drawable, val clear: Drawable)
+    private val decorations = mutableListOf<Decoration>()
+    private var iconSkin: MediaSpeakerSkin.Skin? = null
     private val tints = mutableListOf<Tint>()
     private val lightIcon = ColorStateList.valueOf(0xE8FFFFFF.toInt())
     private val quietDots = ColorStateList.valueOf(0xA8FFFFFF.toInt())
@@ -65,7 +70,22 @@ internal class CompactGlassGeometry(
         seek.setPadding(seek.paddingLeft, 0, seek.paddingRight, 0)
         resize(seek, height, width)
         fill?.cornerRadius = width / 2f
-        row.findViewById<View>(0x7e0a1005)?.let { tintImages(it) }
+        // These are dedicated native outline planes, NOT the progress drawable.
+        // Keep their Views and animations, but remove all paint from cloned shapes.
+        for (id in intArrayOf(0x7e0a1054, 0x7e0a1055)) {
+            val view = row.findViewById<View>(id) ?: continue
+            val original = view.background as? GradientDrawable ?: continue
+            val clear = original.constantState?.newDrawable()?.mutate() as? GradientDrawable ?: continue
+            clear.setColor(Color.TRANSPARENT)
+            clear.setStroke(0, Color.TRANSPARENT)
+            decorations.add(Decoration(view, original, clear))
+            view.background = clear
+            android.util.Log.i("LiquidVolume", "GLASS_OUTLINE_REMOVED id=${id.toString(16)} visibility=${view.visibility} size=${view.width}x${view.height}")
+        }
+        row.findViewById<View>(0x7e0a1005)?.let {
+            tintImages(it)
+            iconSkin = MediaSpeakerSkin.install(it)
+        }
         (panel.findViewById<View>(0x7e0a103a) as? ImageView)?.let {
             tints.add(Tint(it, it.imageTintList))
             it.imageTintList = quietDots
@@ -101,5 +121,9 @@ internal class CompactGlassGeometry(
                 it.view.imageTintList = it.tint
         }
         tints.clear()
+        iconSkin?.restore()
+        iconSkin = null
+        decorations.forEach { if (it.view.background === it.clear) it.view.background = it.original }
+        decorations.clear()
     }
 }
