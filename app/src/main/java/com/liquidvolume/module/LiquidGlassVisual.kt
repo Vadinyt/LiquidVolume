@@ -156,14 +156,13 @@ class LiquidGlassShellDrawable : Drawable() {
  * The dynamic meniscus reads Samsung's progress but never writes to it.
  */
 /**
- * Glass rim: only the capsule outline and a confined TOP reflection.
+ * Glass rim: a single capsule perimeter with brighter ends.
  * No horizontal meniscus line or vertical full-height arc.
  */
 class LiquidGlassRimDrawable : Drawable() {
     private val brush = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val rimRect = RectF()
-    private val topArc = RectF()
     private var rimShader: Shader? = null
     private var overallAlpha = 255
     private var filter: ColorFilter? = null
@@ -178,9 +177,6 @@ class LiquidGlassRimDrawable : Drawable() {
         val stroke = max(1.0f, rect.width() * 0.010f)
         rimRect.set(rect.left + stroke * 0.5f, rect.top + stroke * 0.5f,
             rect.right - stroke * 0.5f, rect.bottom - stroke * 0.5f)
-        val inset = rect.width() * 0.075f
-        topArc.set(rect.left + inset, rect.top + inset,
-            rect.right - inset, rect.top + rect.width() - inset)
         rimShader = LinearGradient(
             rect.left, rect.top, rect.left, rect.bottom,
             intArrayOf(
@@ -202,11 +198,9 @@ class LiquidGlassRimDrawable : Drawable() {
         brush.shader = rimShader
         canvas.drawRoundRect(rimRect, radius, radius, brush)
 
-        // Short specular highlight confined to the top semicircle.
+        // One perimeter only. Specular light comes from the perimeter gradient,
+        // never from an inset arc that reads as a second capsule.
         brush.shader = null
-        brush.color = 0x48FFFFFF
-        brush.strokeWidth = max(0.8f, rect.width() * 0.008f)
-        canvas.drawArc(topArc, 210f, 115f, false, brush)
         brush.style = Paint.Style.FILL
     }
 

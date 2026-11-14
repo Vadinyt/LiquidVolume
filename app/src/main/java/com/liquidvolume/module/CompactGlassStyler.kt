@@ -1,5 +1,7 @@
 package com.liquidvolume.module
 
+import android.content.res.ColorStateList
+import android.graphics.PorterDuff
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -24,6 +26,7 @@ internal object CompactGlassStyler {
     private val installed = WeakHashMap<ViewGroup, StyleState>()
     private val pending = WeakHashMap<View, Boolean>()
     private val backend by lazy { SamsungGlassBlur() }
+    private val clearTrackTint = ColorStateList.valueOf(Color.TRANSPARENT)
     private var failures = 0
     private var reports = 0
 
@@ -44,6 +47,8 @@ internal object CompactGlassStyler {
         // Samsung unconditionally calls getForeground().setAlpha(30). Never null it.
         val clearForeground: Drawable = ColorDrawable(Color.TRANSPARENT)
     ) {
+        val nativeBackgroundTint = seek.progressBackgroundTintList
+        val nativeBackgroundTintMode = seek.progressBackgroundTintMode
         var detachListener: View.OnAttachStateChangeListener? = null
         var appliedBlurBackground: Drawable? = null
         var blurTouched = false
@@ -156,6 +161,11 @@ internal object CompactGlassStyler {
             blur.foreground = applied.clearForeground
             blur.visibility = View.VISIBLE
             // Keep the existing child and every Samsung cast/callback valid.
+            // drawableStateChanged can restore the whole LayerDrawable alpha.
+            // A transparent SRC_IN background tint survives that reset and
+            // covers both the native background fill and its stroke.
+            seek.progressBackgroundTintMode = PorterDuff.Mode.SRC_IN
+            seek.progressBackgroundTintList = clearTrackTint
             inner.alpha = 0
             // SecRoundedCornerSeekBarDrawable paints some pieces with its own
             // Paint and rewrites its gradient on each level. View composition
@@ -181,7 +191,7 @@ internal object CompactGlassStyler {
             if (reports++ < 6) Log.i(TAG,
                 "GLASS_COMPOSITION_APPLIED backend=SemBlurInfo mode=0 " +
                     "blur=${blur.width}x${blur.height} visibility=${blur.visibility} " +
-                    "innerAlpha=${inner.alpha} fillViewAlpha=${seek.alpha} progressPreserved=${layers.findDrawableByLayerId(android.R.id.progress) === progress}")
+                    "innerAlpha=${inner.alpha} maxTrackHeight=${seek.maxHeight} fillViewAlpha=${seek.alpha} progressPreserved=${layers.findDrawableByLayerId(android.R.id.progress) === progress}")
         } catch (error: Throwable) {
             rollback(track, applied)
             throw error
@@ -223,6 +233,12 @@ internal object CompactGlassStyler {
                 state.seek.alpha = state.nativeSeekAlpha
         }
         restore { if (track.background === state.shell) setBackgroundPreservingPadding(track, state.originalTrackBackground) }
+        restore {
+            if (state.seek.progressBackgroundTintList === clearTrackTint) {
+                state.seek.progressBackgroundTintMode = state.nativeBackgroundTintMode
+                state.seek.progressBackgroundTintList = state.nativeBackgroundTint
+            }
+        }
         restore { if (state.inner.alpha == 0) state.inner.alpha = state.originalInnerAlpha }
         restore { if (state.blur.foreground === state.clearForeground) state.blur.foreground = state.originalBlurForeground }
         restore {

@@ -28,6 +28,10 @@ internal class CompactGlassGeometry(
     private val fill = (((seek.progressDrawable as? LayerDrawable)
         ?.findDrawableByLayerId(android.R.id.progress) as? InsetDrawable)
         ?.drawable as? LayerDrawable)?.findDrawableByLayerId(0x7e0a1056) as? GradientDrawable
+    private val nativeMinHeight = seek.minHeight
+    private val nativeMaxHeight = seek.maxHeight
+    private val nativePaddingTop = seek.paddingTop
+    private val nativePaddingBottom = seek.paddingBottom
     private val originalCorner = fill?.cornerRadius
     private val originalCorners = fill?.cornerRadii?.clone()
     private var listener: View.OnLayoutChangeListener? = null
@@ -54,6 +58,11 @@ internal class CompactGlassGeometry(
         resize(blur, width, height)
         // The native horizontal SeekBar rotates by 270 degrees. Swap the physical
         // capsule axes instead of scaling the whole View (which distorts corners).
+        // AbsSeekBar clamps track thickness to min(maxHeight, paddedHeight).
+        // LayoutParams alone leave a narrow native track inside the wide shell.
+        seek.minHeight = width
+        seek.maxHeight = width
+        seek.setPadding(seek.paddingLeft, 0, seek.paddingRight, 0)
         resize(seek, height, width)
         fill?.cornerRadius = width / 2f
         row.findViewById<View>(0x7e0a1005)?.let { tintImages(it) }
@@ -81,6 +90,9 @@ internal class CompactGlassGeometry(
     fun restore() {
         listener?.let { track.removeOnLayoutChangeListener(it) }
         listener = null
+        seek.minHeight = nativeMinHeight
+        seek.maxHeight = nativeMaxHeight
+        seek.setPadding(seek.paddingLeft, nativePaddingTop, seek.paddingRight, nativePaddingBottom)
         sizes.forEach { resize(it.view, it.width, it.height) }
         if (originalCorners != null) fill?.cornerRadii = originalCorners
         else originalCorner?.let { fill?.cornerRadius = it }
