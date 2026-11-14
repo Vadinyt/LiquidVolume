@@ -17,6 +17,7 @@ internal object CompactGlassStyler {
     private const val TAG = "LiquidVolume"
     private const val BLUR_ID = 0x7e0a1030
     private const val TRACK_ID = 0x7e0a1052
+    private const val FILL_OPACITY = 0.62f
     private const val SEEK_ID = 0x7e0a1051
     const val PANEL_CLASS = "com.android.systemui.volume.view.standard.VolumePanelView"
     const val ROW_CLASS = "com.android.systemui.volume.view.VolumeRowView"
@@ -28,6 +29,8 @@ internal object CompactGlassStyler {
 
     private class StyleState(
         val blur: View,
+        val seek: ProgressBar,
+        var nativeSeekAlpha: Float,
         val inner: Drawable,
         val originalTrackBackground: Drawable?,
         val originalBlurBackground: Drawable?,
@@ -119,13 +122,13 @@ internal object CompactGlassStyler {
         if (progress.javaClass.name != "com.android.systemui.volume.view.SecRoundedCornerSeekBarDrawable") return
 
         var state = installed[track]
-        if (state != null && state.inner !== inner) {
+        if (state != null && (state.inner !== inner || state.seek !== seek)) {
             rollback(track, state)
             state = null
         }
         val isNew = state == null
         val currentBlur = backend.current(blur)
-        val applied = state ?: StyleState(blur, inner, track.background, blur.background,
+        val applied = state ?: StyleState(blur, seek, seek.alpha, inner, track.background, blur.background,
             blur.foreground, blur.visibility, inner.alpha, currentBlur, backend.create(blur))
         try {
             if (!isNew && currentBlur !== applied.appliedBlurInfo) {
@@ -153,6 +156,10 @@ internal object CompactGlassStyler {
             blur.visibility = View.VISIBLE
             // Keep the existing child and every Samsung cast/callback valid.
             inner.alpha = 0
+            // SecRoundedCornerSeekBarDrawable paints some pieces with its own
+            // Paint and rewrites its gradient on each level. View composition
+            // covers ALL those pieces without replacing or hooking draw().
+            seek.alpha = applied.nativeSeekAlpha * FILL_OPACITY
             setBackgroundPreservingPadding(track, applied.shell)
             applied.rim.setBounds(0, 0, track.width, track.height)
             if (isNew) {
@@ -169,11 +176,19 @@ internal object CompactGlassStyler {
             if (reports++ < 6) Log.i(TAG,
                 "GLASS_COMPOSITION_APPLIED backend=SemBlurInfo mode=0 " +
                     "blur=${blur.width}x${blur.height} visibility=${blur.visibility} " +
-                    "innerAlpha=${inner.alpha} progressPreserved=${layers.findDrawableByLayerId(android.R.id.progress) === progress}")
+                    "innerAlpha=${inner.alpha} fillViewAlpha=${seek.alpha} progressPreserved=${layers.findDrawableByLayerId(android.R.id.progress) === progress}")
         } catch (error: Throwable) {
             rollback(track, applied)
             throw error
         }
+    }
+
+    // VolumeSeekBar.setEnabled writes View.alpha itself (1 or 0.7 in this APK).
+    // Capture the native result first, then multiply once, never cumulatively.
+    fun onNativeEnabledChanged(view: View) {
+        val state = installed.values.firstOrNull { it.seek === view } ?: return
+        state.nativeSeekAlpha = view.alpha
+        view.alpha = state.nativeSeekAlpha * FILL_OPACITY
     }
 
     private fun setBackgroundPreservingPadding(view: View, drawable: Drawable?) {
@@ -197,6 +212,10 @@ internal object CompactGlassStyler {
         installed.remove(track)
         state.detachListener?.let { track.removeOnAttachStateChangeListener(it) }
         restore { track.overlay.remove(state.rim) }
+        restore {
+            if (abs(state.seek.alpha - state.nativeSeekAlpha * FILL_OPACITY) < 0.001f)
+                state.seek.alpha = state.nativeSeekAlpha
+        }
         restore { if (track.background === state.shell) setBackgroundPreservingPadding(track, state.originalTrackBackground) }
         restore { if (state.inner.alpha == 0) state.inner.alpha = state.originalInnerAlpha }
         restore { if (state.blur.foreground === state.clearForeground) state.blur.foreground = state.originalBlurForeground }

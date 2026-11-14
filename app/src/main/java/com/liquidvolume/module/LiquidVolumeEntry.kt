@@ -18,6 +18,21 @@ class LiquidVolumeEntry : XposedModule() {
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
         val loader = param.defaultClassLoader
         try {
+            val seekClass = Class.forName("com.android.systemui.volume.view.VolumeSeekBar", false, loader)
+            val enabled = seekClass.getDeclaredMethod("setEnabled", Boolean::class.javaPrimitiveType)
+            hook(enabled).setId("liquidvolume.compact.fill.enabled").intercept { chain ->
+                val result = chain.proceed()
+                try {
+                    (chain.thisObject as? View)?.let { CompactGlassStyler.onNativeEnabledChanged(it) }
+                } catch (error: Throwable) {
+                    log(Log.ERROR, TAG, "GLASS_ENABLED_STYLE_FAILED", error)
+                }
+                result
+            }
+        } catch (error: Throwable) {
+            log(Log.ERROR, TAG, "GLASS_ENABLED_HOOK_FAILED", error)
+        }
+        try {
             val panelClass = Class.forName(CompactGlassStyler.PANEL_CLASS, false, loader)
             val blurClass = panelClass.getDeclaredField("blurEffect").type
             val method = blurClass.getDeclaredMethod("setRealTimeBlur", View::class.java,
