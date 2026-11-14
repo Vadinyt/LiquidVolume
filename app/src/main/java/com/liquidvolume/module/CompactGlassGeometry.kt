@@ -61,14 +61,15 @@ internal class CompactGlassGeometry(
         track.addOnLayoutChangeListener(ready)
         resize(track, width, height)
         resize(blur, width, height)
-        // The native horizontal SeekBar rotates by 270 degrees. Swap the physical
-        // capsule axes instead of scaling the whole View (which distorts corners).
+        // Samsung's rotated SeekBar uses a square View centered in the capsule.
+        // Its low-level painter centers Y at bounds.width()/2. Keep that square
+        // canvas and change only track thickness, or low fills land off-screen.
         // AbsSeekBar clamps track thickness to min(maxHeight, paddedHeight).
         // LayoutParams alone leave a narrow native track inside the wide shell.
         seek.minHeight = width
         seek.maxHeight = width
         seek.setPadding(seek.paddingLeft, 0, seek.paddingRight, 0)
-        resize(seek, height, width)
+        resize(seek, height, height)
         fill?.cornerRadius = width / 2f
         // These are dedicated native outline planes, NOT the progress drawable.
         // Keep their Views and animations, but remove all paint from cloned shapes.

@@ -26,16 +26,62 @@ class LowVolumeFillTest {
         return pixels.count { Color.alpha(it) > 0 }
     }
 
-    @Test fun reproducesSamsungInvertedRectangleFailure() {
-        // Exact native RectF argument order in the supplied APK: bottom before top.
-        val image = bitmap()
-        Canvas(image).drawRoundRect(RectF(0f, 391f, 100f, 200f), 5f, 5f,
-            Paint().apply { color = Color.WHITE })
-        assertEquals(0, painted(image))
+    private fun nativeLow(canvas: Canvas, nativeBounds: Rect, level: Int) {
+        val width = nativeBounds.width().toFloat()
+        val thickness = nativeBounds.height().toFloat()
+        val limit = (thickness * 10000 / width).toInt()
+        val extent = thickness * level / limit
+        val radius = extent - thickness / 2
+        val nativeClip = android.graphics.Path().apply {
+            addCircle(thickness / 2, width / 2, thickness / 2, android.graphics.Path.Direction.CW)
+        }
+        canvas.clipPath(nativeClip)
+        canvas.drawRoundRect(RectF(extent - thickness, width / 2 + thickness / 2,
+            extent, width / 2 - thickness / 2), radius, radius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+    }
+
+    @Test fun originalSamsungLowBranchWorksOnSquareCanvasAndFailsOnOldRectangle() {
+        for (level in listOf(66, 133, 666, 1333, 2666, threshold)) {
+            val broken = Bitmap.createBitmap(591, 191, Bitmap.Config.ARGB_8888)
+            nativeLow(Canvas(broken), Rect(0, 0, 591, 191), level)
+            assertEquals("rectangular canvas at $level", 0, painted(broken))
+            val fixed = Bitmap.createBitmap(191, 591, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(fixed)
+            // Exact FrameLayout CENTER placement and View rotation from Samsung XML.
+            canvas.translate(-200f, 0f)
+            canvas.rotate(270f, 295.5f, 295.5f)
+            nativeLow(canvas, Rect(0, 200, 591, 391), level)
+            assertTrue("square canvas at $level", painted(fixed) > 0)
+            assertEquals(0, fixed.getPixel(95, 0))
+        }
+    }
+
+    @Test fun squareSeekBarKeepsApprovedTrackThicknessAndCenter() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val parent = android.widget.FrameLayout(context)
+        val seek = android.widget.SeekBar(context).apply {
+            background = null
+            thumb = null
+            minHeight = 191
+            maxHeight = 191
+            setPadding(0, 0, 0, 0)
+            rotation = 270f
+            progressDrawable = android.graphics.drawable.GradientDrawable().apply { setColor(Color.WHITE) }
+        }
+        parent.addView(seek, android.widget.FrameLayout.LayoutParams(591, 591, android.view.Gravity.CENTER))
+        parent.measure(android.view.View.MeasureSpec.makeMeasureSpec(191, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(591, android.view.View.MeasureSpec.EXACTLY))
+        parent.layout(0, 0, 191, 591)
+        assertEquals(591, seek.width)
+        assertEquals(591, seek.height)
+        assertEquals(-200, seek.left)
+        assertEquals(0, seek.top)
+        assertEquals(Rect(0, 200, 591, 391), seek.progressDrawable.bounds)
     }
 
     @Test fun firstNativeMediaStepAndEveryLowLevelDrawVisiblePixels() {
-        val renderer = LowVolumeFillRenderer()
+        val renderer = PreviewFillRenderer()
         var previous = 0
         // 66/10000 corresponds to media step 1/150; fifth key press is ~3333.
         for (level in listOf(66, 133, 666, 1333, 2000, 2666, threshold)) {
@@ -54,7 +100,7 @@ class LowVolumeFillTest {
     }
 
     @Test fun muteIsEmptyAndUpperRangeFallsThroughUntouched() {
-        val renderer = LowVolumeFillRenderer()
+        val renderer = PreviewFillRenderer()
         val image = bitmap()
         val canvas = Canvas(image)
         assertTrue(renderer.draw(canvas, bounds, 0, Color.WHITE, Color.WHITE, 0))
@@ -65,7 +111,7 @@ class LowVolumeFillTest {
     }
 
     @Test fun endpointMatchesNativeCircleAndCanvasStateIsRestored() {
-        val renderer = LowVolumeFillRenderer()
+        val renderer = PreviewFillRenderer()
         val image = bitmap()
         val canvas = Canvas(image)
         val clipBefore = canvas.clipBounds
@@ -82,13 +128,13 @@ class LowVolumeFillTest {
     }
 
     @Test fun descendingLevelsDoNotRetainStaleFillOrBounds() {
-        val renderer = LowVolumeFillRenderer()
+        val renderer = PreviewFillRenderer()
         for (level in listOf(threshold, 1333, 66, 0)) {
             val reused = bitmap()
             val fresh = bitmap()
             val moved = Rect(bounds).apply { offset(9, -40) }
             renderer.draw(Canvas(reused), moved, level, 0x66FFFFFF, Color.WHITE, 0)
-            LowVolumeFillRenderer().draw(Canvas(fresh), moved, level, 0x66FFFFFF, Color.WHITE, 0)
+            PreviewFillRenderer().draw(Canvas(fresh), moved, level, 0x66FFFFFF, Color.WHITE, 0)
             assertTrue(reused.sameAs(fresh))
         }
     }

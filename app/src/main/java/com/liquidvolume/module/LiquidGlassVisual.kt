@@ -216,7 +216,7 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         onLevelChanged?.invoke(previewStep)
         invalidate()
     }
-    private val lowFill = LowVolumeFillRenderer()
+    private val lowFill = PreviewFillRenderer()
     private val horizontalBounds = Rect()
     private val density = resources.displayMetrics.density
     private val sliderRect = RectF()
@@ -246,6 +246,8 @@ class LiquidGlassPreviewView(context: Context, attrs: AttributeSet? = null) : Vi
         val w = width.toFloat()
         val h = height.toFloat()
         if (w == 0f || h == 0f) return
+        brush.reset()
+        brush.isAntiAlias = true
         if (showDarkBackdrop) {
             // Real-life comparison: this is close to the black app backgrounds
             // visible behind the actual Samsung SystemUI compact slider.

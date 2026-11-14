@@ -7,19 +7,10 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.drawable.Drawable
-import java.util.WeakHashMap
 import kotlin.math.max
 
-/** Only the broken low-level branch of registered compact progress drawables. */
-internal object LowVolumeFill {
-    private val renderers = WeakHashMap<Drawable, LowVolumeFillRenderer>()
-    fun register(drawable: Drawable) { renderers.getOrPut(drawable) { LowVolumeFillRenderer() } }
-    fun remove(drawable: Drawable) { renderers.remove(drawable) }
-    fun renderer(drawable: Drawable): LowVolumeFillRenderer? = renderers[drawable]
-}
-
-internal class LowVolumeFillRenderer {
+/** Studio illustration of the native low cap, using bounds-local coordinates. */
+internal class PreviewFillRenderer {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val clip = Path()
@@ -49,8 +40,8 @@ internal class LowVolumeFillRenderer {
             val diameter = thickness.toFloat()
             val extent = diameter * level / threshold
             // Same native horizontal progress coordinates, before View rotation.
-            // Samsung's low branch passes (centerY+r, centerY-r) as top/bottom.
-            // Use ordered bounds, including offsets, and a nonnegative radius.
+            // The Studio draws in a local rectangular coordinate system.
+            // SystemUI keeps its original square canvas and native draw method.
             fill.set(bounds.left + extent - diameter, bounds.top.toFloat(),
                 bounds.left + extent, bounds.bottom.toFloat())
             radius = max(0f, extent - diameter * 0.5f)

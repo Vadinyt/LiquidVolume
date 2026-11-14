@@ -3,8 +3,6 @@ package com.liquidvolume.module
 import android.app.Application
 import android.util.Log
 import android.view.View
-import android.graphics.Canvas
-import android.graphics.drawable.Drawable
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -19,38 +17,6 @@ class LiquidVolumeEntry : XposedModule() {
         super.onPackageLoaded(param)
         if (param.packageName != SYSTEM_UI || Application.getProcessName() != SYSTEM_UI) return
         val loader = param.defaultClassLoader
-        try {
-            val drawableClass = Class.forName("com.android.systemui.volume.view.SecRoundedCornerSeekBarDrawable", false, loader)
-            val draw = drawableClass.getDeclaredMethod("draw", Canvas::class.java)
-            val level = drawableClass.getDeclaredField("level").apply { isAccessible = true }
-            val start = drawableClass.getDeclaredField("startColor").apply { isAccessible = true }
-            val end = drawableClass.getDeclaredField("endColor").apply { isAccessible = true }
-            val button = drawableClass.getDeclaredField("buttonColor").apply { isAccessible = true }
-            var reportedFailure = false
-            hook(draw).setId("liquidvolume.compact.lowfill").intercept { chain ->
-                var handled = false
-                val drawable = chain.thisObject as? Drawable
-                try {
-                    if (drawable != null) {
-                        val renderer = LowVolumeFill.renderer(drawable)
-                        if (renderer != null) handled = renderer.draw(chain.args[0] as Canvas,
-                            drawable.bounds, level.getInt(drawable), start.getInt(drawable),
-                            end.getInt(drawable), button.getInt(drawable))
-                    }
-                } catch (error: Throwable) {
-                    drawable?.let { LowVolumeFill.remove(it) }
-                    if (!reportedFailure) {
-                        reportedFailure = true
-                        log(Log.ERROR, TAG, "GLASS_LOWFILL_FAILED_NATIVE_FALLBACK", error)
-                    }
-                }
-                // Above the low-level branch, Samsung draws exactly as before.
-                if (handled) null else chain.proceed()
-            }
-            log(Log.INFO, TAG, "GLASS_LOWFILL_HOOK_INSTALLED")
-        } catch (error: Throwable) {
-            log(Log.ERROR, TAG, "GLASS_LOWFILL_HOOK_FAILED", error)
-        }
         try {
             val icon = Class.forName("com.android.systemui.volume.view.icon.VolumeIcon", false, loader)
             val update = icon.declaredMethods.single { it.name == "updateIconState" && it.parameterTypes.size == 2 }
